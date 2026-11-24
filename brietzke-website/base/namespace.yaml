@@ -1,0 +1,11 @@
+# Public only: labeled for the traefik-public Gateway (Cloudflare tunnel), not for the LAN
+# Gateway. LAN clients reach brietzke.me through Cloudflare like everyone else.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: brietzke-me
+  labels:
+    olympians/exposure: public
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

@@ -1,0 +1,102 @@
+# brietzke.me: the image is built from the brietzke-me Forgejo repo and pushed to Harbor's
+# public library project. The tag is set in overlays/olympians (make deploy TAG=...).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: website
+  namespace: brietzke-me
+  labels:
+    app.kubernetes.io/name: website
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: website
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: website
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: website
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: harbor.faultycloud.xyz/library/brietzke-me
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # nginx-unprivileged writes its pid and temp files under /tmp.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: website
+  namespace: brietzke-me
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: website
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: website
+  namespace: brietzke-me
+spec:
+  selector:
+    app.kubernetes.io/name: website
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Apex only; www.brietzke.me is not served.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: website
+  namespace: brietzke-me
+spec:
+  parentRefs:
+    - {name: traefik-public, namespace: traefik}
+  hostnames:
+    - brietzke.me
+  rules:
+    - backendRefs:
+        - name: website
+          port: 80

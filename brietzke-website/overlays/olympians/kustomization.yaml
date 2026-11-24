@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: brietzke-website-olympians-kustomization
+namespace: brietzke-me
+resources:
+- ../../base
+
+# The deployed site version. `make deploy TAG=<sha12>` rewrites newTag and applies;
+# commit the change so git records what is live.
+images:
+- name: harbor.faultycloud.xyz/library/brietzke-me
+  newName: harbor.faultycloud.xyz/library/brietzke-me
+  newTag: 97f473e477df
+
+labels:
+- pairs:
+    app.kubernetes.io/managed-by: kustomize

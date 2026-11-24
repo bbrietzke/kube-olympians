@@ -38,6 +38,7 @@ Standard targets (only where the component supports them):
 | harbor | chart 1.19.4 running Harbor v2.16.0 images | `harbor` namespace, password Secrets, `harbor` DatabaseRole + Database (cluster00) | — | ✅ (Helm only) | — | `password` (see `harbor/README.md`) |
 | forgejo | chart 17.3.3 → Forgejo 15.0.12 (LTS); forgejo-runner 13.2.2 | `forgejo` namespace (PSA `privileged`), Secrets (incl. runner secrets), `forgejo` DatabaseRole + Database (cluster00) | — | ✅ (Helm only) | — | `runners`, `password` (see `forgejo/README.md`) |
 | cloudflared | cloudflared 2026.11.2 | Cloudflare tunnel + token (by hand), traefik `postCertManager` | — | — | Connector Deployment (2 replicas, one per worker) + token Secret from git-ignored `cloudflared/base/cloudflared.env` | `whoami` (see `cloudflared/README.md`) |
+| brietzke-website | nginx-unprivileged 1.31.7 serving the Hugo site from the `brietzke-me/website` Forgejo repo | Image in Harbor (`library/brietzke-me`, built by Forgejo Actions), traefik `public` + cloudflared | — | — | `brietzke-me` namespace, Deployment (2 replicas), HTTPRoute `brietzke.me` on `traefik-public` | `deploy TAG=<sha12>` |
 
 ## Cluster
 Talos Linux v1.14, bootstrapped from `../talos_olympians`. Kubernetes v1.37.1, amd64, kernel 6.18.
@@ -83,6 +84,7 @@ The root targets stop there. Four more steps are manual, in this order:
 - `make -C harbor helm` installs Harbor at `https://harbor.faultycloud.xyz`, after `cluster00` and `traefik postCertManager`. It generates its own git-ignored passwords and creates a `harbor` DatabaseRole and Database for cluster00 without modifying cluster00 or the postgresql component (see `harbor/README.md`). The name must resolve to `192.168.3.200` on the LAN, including on the nodes, for pushes and pulls.
 - `make -C forgejo helm runners` installs Forgejo at `https://git.faultycloud.xyz` (SSH on `192.168.3.201` as `git-ssh.faultycloud.xyz`, which needs its own DNS record) and its two Actions runners, after `cluster00` and `traefik postCertManager`. Like harbor, it generates its own git-ignored credentials and uses a DatabaseRole and a Database instead of modifying cluster00.
 - `make -C cloudflared olympians` connects the Cloudflare tunnel for `brietzke.me` to the `traefik-public` Gateway, after `traefik postCertManager`. The tunnel and its routes are created by hand in Cloudflare first (see `cloudflared/README.md`).
+- `make -C brietzke-website deploy TAG=<sha12>` serves `https://brietzke.me` (apex only, public only) from the image the `brietzke-me/website` repo's Forgejo build pushed to Harbor. It records the tag in `brietzke-website/overlays/olympians`, so commit it afterwards.
 
 After `postCertManager`, `traefik-gateway` has four listeners: `web` and `websecure` for `faultycloud.xyz`, plus `web-wildcard` and `websecure-wildcard` for `*.faultycloud.xyz`. A wildcard listener doesn't match the bare domain, hence the pairs. Both HTTPS listeners share the `faultycloud-xyz-tls` certificate, which covers both names. An HTTPRoute can attach only from a namespace labeled `olympians/traefik-gateway=allowed`:
 
