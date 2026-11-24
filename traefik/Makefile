@@ -12,7 +12,7 @@ $(WAIT_READY) -n $(NAMESPACE)
 $(KUBECTL) -n $(NAMESPACE) wait gateway --all --for=condition=Programmed --timeout=$(WAIT_TIMEOUT)
 endef
 
-.PHONY: prerequisites gateway install helm postCertManager uninstall uninstall-helm
+.PHONY: prerequisites gateway install helm postCertManager public uninstall-public uninstall uninstall-helm
 
 prerequisites: ## Install the Gateway API v1.7.0 standard CRDs
 	$(call kinstall,overlays/prerequisites)
@@ -33,6 +33,14 @@ postCertManager: prerequisites ## Upgrade the Helm release to the HTTPS gateway 
 	$(HELM) upgrade --install traefik traefik --repo $(CHART_REPO) --version $(CHART_VERSION) \
 		-n $(NAMESPACE) --create-namespace -f helm/postCertManager.yaml --wait
 	$(wait_traefik)
+	$(MAKE) public
+
+public: ## Apply the traefik-public Gateway (brietzke.me, tunnel only); run by postCertManager
+	$(call kapply,overlays/public)
+	$(KUBECTL) -n $(NAMESPACE) wait gateway/traefik-public --for=condition=Programmed --timeout=$(WAIT_TIMEOUT)
+
+uninstall-public: ## Remove the traefik-public Gateway (routes attached to it stop being served)
+	-$(call kdelete,overlays/public)
 
 # Both uninstall targets also remove the Gateway API CRDs, which deletes every
 # Gateway/HTTPRoute in the cluster.

@@ -72,6 +72,22 @@ ports:
           to: websecure
           scheme: https
           permanent: true
+  # Entry point for the Cloudflare tunnel (see cloudflared/). Only the traefik-public Gateway
+  # (traefik/overlays/public) has listeners on this port, so a request arriving here can only
+  # match routes attached to that Gateway, never the LAN-only traefik-gateway.
+  # It is kept off the LoadBalancer on 192.168.3.200 and served only by the ClusterIP Service
+  # traefik-internal (service.additionalServices below), which cloudflared connects to.
+  # cloudflared sends plain HTTP; Cloudflare's edge has already terminated TLS.
+  public:
+    port: 8100
+    expose:
+      default: false
+      internal: true
+    exposedPort: 80
+    protocol: TCP
+    # Trust X-Forwarded-* only from pods (cloudflared), so apps see the visitor's IP and https.
+    forwardedHeaders:
+      trustedIPs: ["10.254.0.0/22"]
 
 # @schema additionalProperties: false
 providers:
@@ -124,3 +140,8 @@ global:
 service:
   annotations:
     lbipam.cilium.io/ips: "192.168.3.200"
+  additionalServices:
+    # ClusterIP Service "traefik-internal", carrying only ports with expose.internal (public).
+    internal:
+      spec:
+        type: ClusterIP

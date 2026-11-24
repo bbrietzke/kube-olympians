@@ -1,6 +1,9 @@
 # Cloudflare API token for cert-manager (see certificateManager/base/cloudflare.env.example)
 certificateManager/base/cloudflare.env
 
+# Cloudflare Tunnel token for cloudflared (see cloudflared/base/cloudflared.env.example)
+cloudflared/base/cloudflared.env
+
 # Backblaze B2 application key for PostgreSQL backups (see postgresql/base/backblaze.env.example)
 postgresql/base/backblaze.env
 

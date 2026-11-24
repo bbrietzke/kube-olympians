@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: traefik-public-kustomization
+# The traefik-public Gateway (brietzke.me, Cloudflare tunnel only). Needs helm/postCertManager.yaml,
+# which adds the "public" entry point on port 8100.
+resources:
+- gateway.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize

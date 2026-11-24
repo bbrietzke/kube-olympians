@@ -37,6 +37,7 @@ Standard targets (only where the component supports them):
 | postgresql | CloudNativePG v1.30.2 (chart 0.29.2) + Barman Cloud plugin v0.16.0 | — | ✅ (upstream manifests) | ✅ (plugin via kustomize) | `db` namespace + `cluster00` (3 instances on `rook-ceph-ssd`) + daily snapshot backup + WAL archive and weekly base backup to Backblaze B2 (key in git-ignored `postgresql/base/backblaze.env`) | `snapshot`, `b2backup`, `snapshots` (see `postgresql/README.md`) |
 | harbor | chart 1.19.4 running Harbor v2.16.0 images | `harbor` namespace, password Secrets, `harbor` DatabaseRole + Database (cluster00) | — | ✅ (Helm only) | — | `password` (see `harbor/README.md`) |
 | forgejo | chart 17.3.3 → Forgejo 15.0.12 (LTS); forgejo-runner 13.2.2 | `forgejo` namespace (PSA `privileged`), Secrets (incl. runner secrets), `forgejo` DatabaseRole + Database (cluster00) | — | ✅ (Helm only) | — | `runners`, `password` (see `forgejo/README.md`) |
+| cloudflared | cloudflared 2026.11.2 | Cloudflare tunnel + token (by hand), traefik `postCertManager` | — | — | Connector Deployment (2 replicas, one per worker) + token Secret from git-ignored `cloudflared/base/cloudflared.env` | `whoami` (see `cloudflared/README.md`) |
 
 ## Cluster
 Talos Linux v1.14, bootstrapped from `../talos_olympians`. Kubernetes v1.37.1, amd64, kernel 6.18.
@@ -81,6 +82,7 @@ The root targets stop there. Four more steps are manual, in this order:
 - `make -C postgresql olympians` creates `cluster00`, its backup schedules and the Backblaze B2 ObjectStore (`s3://bbrietzke-backups/kube-olympians/postgresql/`). First `cp postgresql/base/backblaze.env.example postgresql/base/backblaze.env` and fill in the B2 key. The file is git-ignored, and the target refuses to run without it. It waits up to `PG_TIMEOUT` (default 15m) for the cluster to be Ready, then for WAL archiving to B2, and takes the first B2 base backup if none exists.
 - `make -C harbor helm` installs Harbor at `https://harbor.faultycloud.xyz`, after `cluster00` and `traefik postCertManager`. It generates its own git-ignored passwords and creates a `harbor` DatabaseRole and Database for cluster00 without modifying cluster00 or the postgresql component (see `harbor/README.md`). The name must resolve to `192.168.3.200` on the LAN, including on the nodes, for pushes and pulls.
 - `make -C forgejo helm runners` installs Forgejo at `https://git.faultycloud.xyz` (SSH on `192.168.3.201` as `git-ssh.faultycloud.xyz`, which needs its own DNS record) and its two Actions runners, after `cluster00` and `traefik postCertManager`. Like harbor, it generates its own git-ignored credentials and uses a DatabaseRole and a Database instead of modifying cluster00.
+- `make -C cloudflared olympians` connects the Cloudflare tunnel for `brietzke.me` to the `traefik-public` Gateway, after `traefik postCertManager`. The tunnel and its routes are created by hand in Cloudflare first (see `cloudflared/README.md`).
 
 After `postCertManager`, `traefik-gateway` has four listeners: `web` and `websecure` for `faultycloud.xyz`, plus `web-wildcard` and `websecure-wildcard` for `*.faultycloud.xyz`. A wildcard listener doesn't match the bare domain, hence the pairs. Both HTTPS listeners share the `faultycloud-xyz-tls` certificate, which covers both names. An HTTPRoute can attach only from a namespace labeled `olympians/traefik-gateway=allowed`:
 
@@ -96,6 +98,8 @@ spec:
 ```
 
 A route from an unlabeled namespace, including `traefik` itself, is rejected with `Accepted=False (NotAllowedByListeners)`. Every plain-HTTP request is redirected to HTTPS with a `301`, keeping the host, path and query. Traefik does this on the `web` entrypoint before any route matches, so apps never serve over HTTP and their HTTPRoutes need no redirect filter. These settings are only in `traefik/helm/postCertManager.yaml`. The pre-certificate `helm/install.yaml` route still has a single apex HTTP listener.
+
+`postCertManager` also applies a second Gateway, **`traefik-public`**, for `brietzke.me` and `*.brietzke.me`. It is reachable only through the Cloudflare tunnel, on Traefik's `public` entrypoint (port 8100). That entrypoint is served by the ClusterIP Service `traefik-internal` and is not on `192.168.3.200`. Routes attach to it only from namespaces labeled `olympians/exposure=public`. See `cloudflared/README.md`.
 
 Every `prerequisites`, `install` and `helm` target blocks until what it created is ready, so targets can be chained (`make -C rook install olympians`). Ready means CRDs are Established and all Deployments, DaemonSets and StatefulSets have rolled out (see `hack/wait-ready.sh`). Some components add their own check:
 
@@ -131,7 +135,7 @@ These are deliberate deviations from the pinned upstream manifests. Keep them wh
 - **rook** (`overlays/prerequisites`, and the `helm` target): Pod Security `privileged` labels on the `rook-ceph` namespace.
 - **rook** (`helm/csi-drivers.yaml` + `helm/operator.yaml`, Helm route only): chart v1.21.2 installs the ceph-csi-operator but none of the objects its drivers need. `csi-drivers.yaml` adds the `OperatorConfig` and RBD/CephFS `Driver` objects (from upstream `operator.yaml`) and the `ceph-csi-{rbd,cephfs}-{ctrl,node}plugin` ServiceAccounts and RBAC (from upstream `csi-operator.yaml`). `operator.yaml` sets `CSI_SERVICE_ACCOUNT_PREFIX=ceph-csi-` to match; the chart's default `""` makes the driver pods ask for `rbd-ctrlplugin-sa`, which doesn't exist. Without these, `make helm` times out on the CSI driver. Re-copy them when bumping the chart.
 - **certificateManager** (`overlays/install`): `--enable-gateway-api` and `--enable-certificate-owner-ref=true`, to match `helm/values.yaml`.
-- **traefik** (`helm/*.yaml`): `lbipam.cilium.io/ips: 192.168.3.200` on the Service.
+- **traefik** (`helm/*.yaml`): `lbipam.cilium.io/ips: 192.168.3.200` on the Service. `postCertManager.yaml` also adds the `public` entrypoint (8100, `expose.internal` only, forwarded headers trusted from `10.254.0.0/22`) and the `traefik-internal` ClusterIP Service.
 - **postgresql**:
   - `shared_buffers: 256MB`. It must fit well inside the 2Gi memory limit.
   - Cold (`online: false`) volume-snapshot backups. They were chosen when there was no WAL archive, and they stay self-contained, so a snapshot restore never needs B2. With B2 archiving in place they could switch to hot (`online: true`), which avoids fencing a standby.

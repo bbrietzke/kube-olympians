@@ -9,6 +9,7 @@ include common.mk
 #   postgresql           - CloudNativePG operator (cluster00 is `make -C postgresql olympians`)
 #   harbor               - container registry; manual (`make -C harbor helm`), needs cluster00 + traefik postCertManager
 #   forgejo              - git forge + Actions runners; manual (`make -C forgejo helm runners`), needs cluster00 + traefik postCertManager
+#   cloudflared          - Cloudflare Tunnel to the traefik-public Gateway (brietzke.me); manual (`make -C cloudflared olympians`), needs traefik postCertManager
 #
 # Per-component targets: make -C <component> help
 
@@ -34,6 +35,7 @@ helm: ## Install every component with Helm where a chart exists (kustomize other
 # Remove it on purpose with `make -C cilium uninstall-helm`.
 
 uninstall: ## Tear down everything installed by `make install` (except Cilium)
+	-$(MAKE) -C cloudflared uninstall
 	-$(MAKE) -C forgejo uninstall-helm
 	-$(MAKE) -C harbor uninstall-helm
 	-$(MAKE) -C postgresql uninstall
@@ -44,6 +46,7 @@ uninstall: ## Tear down everything installed by `make install` (except Cilium)
 	-$(MAKE) -C cilium uninstall-olympians
 
 uninstall-helm: ## Tear down everything installed by `make helm` (except Cilium)
+	-$(MAKE) -C cloudflared uninstall
 	-$(MAKE) -C forgejo uninstall-helm
 	-$(MAKE) -C harbor uninstall-helm
 	-$(MAKE) -C postgresql uninstall-helm

@@ -1,0 +1,34 @@
+# Public Gateway for brietzke.me, reached only through the Cloudflare tunnel (cloudflared/).
+# Its listeners use port 8100, Traefik's "public" entry point, which is not on the LoadBalancer
+# (see ports.public in helm/postCertManager.yaml). The LAN Gateway traefik-gateway has no
+# listener on 8100, so internal-only routes can never be served through the tunnel.
+#
+# Plain HTTP: Cloudflare's edge terminates TLS for visitors, and cloudflared connects to
+# traefik-internal.traefik.svc:80 inside the cluster.
+#
+# Routes attach only from namespaces labeled olympians/exposure=public:
+#   kubectl label namespace <ns> olympians/exposure=public
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: traefik-public
+  namespace: traefik
+spec:
+  gatewayClassName: traefik
+  listeners:
+    # A wildcard listener does not match the bare domain, hence the pair.
+    - name: public
+      port: 8100
+      protocol: HTTP
+      hostname: "brietzke.me"
+      allowedRoutes: &publicRoutes
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              olympians/exposure: public
+    - name: public-wildcard
+      port: 8100
+      protocol: HTTP
+      hostname: "*.brietzke.me"
+      allowedRoutes: *publicRoutes
