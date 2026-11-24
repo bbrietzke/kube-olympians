@@ -1,7 +1,17 @@
 # Values for the cilium chart (https://helm.cilium.io/), pinned in ../Makefile.
-# Network interfaces are auto-detected (k8s0 and lan0/ens4f0 both carry global addresses).
+# Network interfaces are auto-detected: every node has its one IPv4 address on lan0/ens4f0.
 ipam:
   mode: kubernetes
+
+# Native routing, no VXLAN. All four nodes share one L2 segment (192.168.3.0/24 on ens4f0), so
+# each agent installs a direct route to every other node's pod /24 via that node's IP
+# (autoDirectNodeRoutes). Pod packets cross the LAN unencapsulated, with the full 1500 MTU.
+# Traffic leaving the pod CIDR is still masqueraded to the node IP, since the router doesn't
+# know 10.254.0.0/22. Adding a node on a different L2 segment would need tunnel mode again,
+# or routes for its pod CIDR on the router.
+routingMode: native
+autoDirectNodeRoutes: true
+ipv4NativeRoutingCIDR: 10.254.0.0/22
 
 kubeProxyReplacement: true
 k8sServiceHost: localhost

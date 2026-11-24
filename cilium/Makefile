@@ -20,6 +20,9 @@ endef
 # the agents (rollOutCiliumPods defaults to false). To apply a change, restart them, one node at
 # a time, with a short pod-traffic blip on each:
 #   kubectl -n kube-system rollout restart daemonset/cilium deployment/cilium-operator
+# For a change both ends of a connection must agree on (routing mode, encryption), restart every
+# agent at once instead, so nodes spend seconds rather than minutes in mixed modes:
+#   kubectl -n kube-system delete pod -l k8s-app=cilium
 helm: ## Install or upgrade Cilium with Helm (helm/values.yaml); waits for the agents and operator
 	$(HELM) upgrade --install cilium cilium --repo $(CHART_REPO) --version $(CHART_VERSION) \
 		-n $(NAMESPACE) -f helm/values.yaml --wait
