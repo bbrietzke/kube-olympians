@@ -1,0 +1,19 @@
+# Site-wide rate limit for brietzke.me: 5 requests/second on average across ALL visitors, with a
+# burst of 20 so one page view (~13 requests: HTML, 6 CSS, 2 JS, images) loads in one go.
+# Requests over the limit get 429 Too Many Requests.
+#
+# sourceCriterion.requestHost groups requests by Host header instead of by client IP, so every
+# visitor shares one bucket. The bucket lives in Traefik's memory: with N Traefik replicas the
+# effective limit is N x 5/s (it's 1 replica today).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ratelimit
+  namespace: brietzke-me
+spec:
+  rateLimit:
+    average: 5
+    period: 1s
+    burst: 20
+    sourceCriterion:
+      requestHost: true

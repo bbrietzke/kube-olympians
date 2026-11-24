@@ -97,6 +97,13 @@ spec:
   hostnames:
     - brietzke.me
   rules:
-    - backendRefs:
+    - filters:
+        # Traefik Middleware in this namespace (ratelimit.yaml).
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: ratelimit
+      backendRefs:
         - name: website
           port: 80

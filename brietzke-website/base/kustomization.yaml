@@ -6,3 +6,4 @@ namespace: brietzke-me
 resources:
   - namespace.yaml
   - website.yaml
+  - ratelimit.yaml
