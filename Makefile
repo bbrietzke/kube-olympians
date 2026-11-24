@@ -14,7 +14,7 @@ include common.mk
 #
 # Per-component targets: make -C <component> help
 
-.PHONY: install helm uninstall uninstall-helm
+.PHONY: install helm uninstall uninstall-helm worker-roles
 
 install: ## Install every component with kustomize (Cilium with Helm), then apply the olympians config
 	$(MAKE) -C cilium helm olympians
@@ -58,3 +58,13 @@ uninstall-helm: ## Tear down everything installed by `make helm` (except Cilium)
 	-$(MAKE) -C rook uninstall-helm
 	-$(MAKE) -C external-snapshotter uninstall
 	-$(MAKE) -C cilium uninstall-olympians
+
+# Talos sets topology.kubernetes.io/region=HOME and zone=olympians on every node from its machine
+# config (../talos_olympians, labels-*.yaml). It can't set node-role.kubernetes.io/worker: on
+# workers it uses the kubelet's credentials, which NodeRestriction forbids from setting node-role
+# labels. Re-run this after a worker is rebuilt and re-registers.
+WORKERS ?= ares hades hera
+
+worker-roles: ## Label the workers node-role.kubernetes.io/worker (Talos can't; see comment)
+	$(KUBECTL) label node $(WORKERS) node-role.kubernetes.io/worker= --overwrite
+	$(KUBECTL) get nodes -L topology.kubernetes.io/region,topology.kubernetes.io/zone
