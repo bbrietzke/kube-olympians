@@ -1,0 +1,11 @@
+---
+crds:
+  enabled: true
+enableCertificateOwnerRef: true
+config:
+  gatewayAPI:
+    enabled: true
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: false

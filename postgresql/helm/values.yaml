@@ -1,0 +1,4 @@
+# cloudnative-pg chart 0.29.2 (operator v1.30.2), installed into cnpg-system.
+# Chart defaults match the upstream manifest that `make install` applies.
+crds:
+  create: true

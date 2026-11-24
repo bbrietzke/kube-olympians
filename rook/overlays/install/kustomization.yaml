@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: rook-install-kustomization
+namespace: rook-ceph
+resources:
+- https://raw.githubusercontent.com/rook/rook/refs/tags/v1.21.2/deploy/examples/operator.yaml
+- https://raw.githubusercontent.com/rook/rook/refs/tags/v1.21.2/deploy/examples/cluster.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+
+patches:
+  - target:
+      kind: CephCluster
+      name: rook-ceph
+    patch: |-
+      # Upstream cluster.yaml leaves csi.cephfs with only commented-out keys, which
+      # parses as null and fails CRD validation ("must be of type object").
+      - op: replace
+        path: /spec/csi/cephfs
+        value: {}
+      # Ceph OSDs on each worker (ares, hades, hera): the 1 TB WD Green SSD (WWN 0x5001b448...,
+      # Ceph class ssd) and the 4 TB Seagate HDD (WWN 0x5000c500..., Ceph class hdd). Matched by
+      # WWN, not sdX, because kernel names can change between boots. The 512 GB Micron SSD
+      # (0x500a0751...) is the Talos system disk and never matches. zeus has only its NVMe system
+      # disk and is tainted, so it gets no OSD.
+      # Upstream's cephx settings are kept: nodes run Talos's 6.18 kernel, so CSI needs
+      # keyType: aes. Only switch to allowedCiphers: [aes256k] once every node runs Linux 7.0+.
+      - op: replace
+        path: /spec/storage/useAllDevices
+        value: false
+      - op: add
+        path: /spec/storage/devicePathFilter
+        value: "^/dev/disk/by-id/wwn-0x(5001b448|5000c500)"

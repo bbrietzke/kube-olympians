@@ -1,0 +1,37 @@
+---
+# Backblaze B2 bucket for cluster00's WAL archive and base backups (Barman Cloud plugin).
+# Files land under s3://bbrietzke-backups/kube-olympians/postgresql/<serverName>/, where serverName
+# comes from the Cluster's plugin parameters (cluster00).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: backblaze
+  namespace: db
+spec:
+  # Recovery window: keep enough base backups and WAL to restore to any point in the last 30 days.
+  # The plugin deletes anything older (checked every 30 minutes). The bucket needs the B2 lifecycle
+  # rule "Keep only the last version of the file", or B2 only hides deleted files and keeps billing them.
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://bbrietzke-backups/kube-olympians/postgresql
+    endpointURL: https://s3.us-east-005.backblazeb2.com
+    s3Credentials:
+      accessKeyId:
+        name: backblaze-b2
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: backblaze-b2
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    # Newer boto3 adds integrity checksums by default that some S3-compatible stores reject.
+    # Only send them when the API requires it (the plugin's documented workaround).
+    env:
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required

@@ -1,0 +1,28 @@
+# Values for the rook-ceph-cluster chart (https://charts.rook.io/release), pinned in ../Makefile.
+# Equivalent of cluster.yaml + the patches in overlays/install.
+# Pools and storage classes are NOT created here; `make olympians` applies them from base/
+# (hdd-pool + the default rook-ceph-hdd StorageClass, ssd-pool + rook-ceph-ssd).
+
+operatorNamespace: rook-ceph
+
+toolbox:
+  # Use `make toolbox` instead.
+  enabled: false
+
+cephClusterSpec:
+  security:
+    cephx:
+      # Nodes run Talos's 6.18 kernel, which needs the legacy key type for CSI. Only switch to
+      # allowedCiphers: [aes256k] (and drop this) once every node runs Linux 7.0+.
+      csi:
+        keyType: aes
+  storage:
+    useAllNodes: true
+    useAllDevices: false
+    # The WD Green SSD (Ceph class ssd) and the Seagate HDD (class hdd) on each worker, matched by
+    # WWN. The Micron SSD is the Talos system disk and never matches. See overlays/install.
+    devicePathFilter: "^/dev/disk/by-id/wwn-0x(5001b448|5000c500)"
+
+cephBlockPools: []
+cephFileSystems: []
+cephObjectStores: []

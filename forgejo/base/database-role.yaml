@@ -1,0 +1,19 @@
+---
+# Forgejo's PostgreSQL login role in the CloudNativePG cluster00, managed declaratively with a
+# DatabaseRole (https://cloudnative-pg.io/docs/1.30/declarative_role_management/). A separate
+# object, so cluster00's own spec (owned by the postgresql component) is never touched.
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: forgejo
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: forgejo
+  comment: Forgejo git forge (forgejo namespace), owner of the forgejo database
+  ensure: present
+  login: true
+  passwordSecret:
+    name: forgejo-db-credentials
+  databaseRoleReclaimPolicy: retain

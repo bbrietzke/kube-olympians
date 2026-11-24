@@ -1,0 +1,47 @@
+# Example Forgejo Actions workflow for the olympians runners. Copy into a repository as
+# .forgejo/workflows/ci.yaml (Forgejo also reads .github/workflows if .forgejo/ doesn't exist).
+#
+# Runner labels (forgejo/overlays/runners/config.yml), all amd64:
+#   docker / ubuntu-latest -> node:22-bookworm   (Debian with node, for JavaScript actions)
+#   docker-cli             -> docker:28-cli      (docker CLI wired to the runner's dind daemon)
+name: ci
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: docker
+    steps:
+      # Resolved against DEFAULT_ACTIONS_URL (https://data.forgejo.org), Forgejo's action mirror.
+      - uses: actions/checkout@v4
+      - name: Where am I running?
+        run: |
+          echo "repo:    ${GITHUB_REPOSITORY} @ ${GITHUB_SHA}"
+          echo "arch:    $(uname -m)"
+          echo "node:    $(node --version)"
+          echo "files:   $(ls | tr '\n' ' ')"
+
+  image:
+    runs-on: docker-cli
+    needs: hello
+    env:
+      IMAGE: harbor.faultycloud.xyz/library/forgejo-ci-example
+    steps:
+      - name: Build an image on the runner's dind daemon
+        run: |
+          mkdir -p /tmp/ctx && cd /tmp/ctx
+          printf 'FROM docker.io/library/alpine:3.22\nRUN echo "built by forgejo-runner on $(uname -m)" > /built-by\nCMD ["cat", "/built-by"]\n' > Dockerfile
+          docker build -t "$IMAGE:${GITHUB_SHA::12}" .
+          docker run --rm "$IMAGE:${GITHUB_SHA::12}"
+      # Add HARBOR_USERNAME / HARBOR_PASSWORD (a Harbor robot account with push rights) as
+      # repository or organisation Actions secrets to enable the push.
+      - name: Push to Harbor
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: |
+          if [ -z "$HARBOR_USERNAME" ]; then echo "no Harbor secrets set; skipping push"; exit 0; fi
+          echo "$HARBOR_PASSWORD" | docker login harbor.faultycloud.xyz -u "$HARBOR_USERNAME" --password-stdin
+          docker push "$IMAGE:${GITHUB_SHA::12}"

@@ -1,0 +1,22 @@
+---
+# Harbor's PostgreSQL login role in the CloudNativePG cluster00, managed declaratively with a
+# DatabaseRole (https://cloudnative-pg.io/docs/1.30/declarative_role_management/). It is a
+# separate object, so cluster00's own spec (owned by the postgresql component) is never touched.
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: harbor
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: harbor
+  comment: Harbor container registry (harbor namespace), owner of the harbor database
+  ensure: present
+  login: true
+  # kubernetes.io/basic-auth Secret in the db namespace (base/kustomization.yaml secretGenerator).
+  # Changing the password in base/harbor-db.env and re-running `make prerequisites` rotates it.
+  passwordSecret:
+    name: harbor-db-credentials
+  # Keep the role in PostgreSQL if this object is deleted (the "harbor" database depends on it).
+  databaseRoleReclaimPolicy: retain

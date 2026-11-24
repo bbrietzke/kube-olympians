@@ -1,0 +1,126 @@
+# Default values for Traefik
+# This is a YAML-formatted file.
+# Declare variables to be passed into templates
+
+ingressClass:  # @schema additionalProperties: false
+  # -- Create a default IngressClass for Traefik
+  enabled: true
+  isDefaultClass: true
+  name: ""
+
+# Traefik experimental features: all off, standard features only.
+experimental:
+  kubernetesGateway:
+    # -- Enable traefik experimental GatewayClass CRD
+    enabled: false
+
+gateway:
+  enabled: true
+  # cert-manager's gateway-shim issues a certificate for the HTTPS listeners and stores it in the
+  # Secret named in certificateRefs. Listeners sharing a Secret share one Certificate whose
+  # dnsNames are all their hostnames (here faultycloud.xyz and *.faultycloud.xyz, via DNS-01).
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
+  defaultScope:  # @schema enum:["All", "None", null]; type:[string, null]; default: null
+  # A wildcard listener hostname does not match the bare domain, so each protocol has an apex
+  # listener and a wildcard listener.
+  #
+  # HTTPRoutes may attach from any namespace labeled olympians/traefik-gateway=allowed, e.g.
+  #   kubectl label namespace <ns> olympians/traefik-gateway=allowed
+  # Unlabeled namespaces (including traefik itself) cannot attach.
+  listeners:
+    web:
+      port: 8000
+      hostname: "faultycloud.xyz"
+      protocol: HTTP
+      namespacePolicy: &routeNamespaces
+        from: Selector
+        selector:
+          matchLabels:
+            olympians/traefik-gateway: allowed
+    web-wildcard:
+      port: 8000
+      hostname: "*.faultycloud.xyz"
+      protocol: HTTP
+      namespacePolicy: *routeNamespaces
+    websecure:
+      port: 8443
+      hostname: "faultycloud.xyz"
+      protocol: HTTPS
+      namespacePolicy: *routeNamespaces
+      certificateRefs:
+        - kind: Secret
+          name: faultycloud-xyz-tls
+    websecure-wildcard:
+      port: 8443
+      hostname: "*.faultycloud.xyz"
+      protocol: HTTPS
+      namespacePolicy: *routeNamespaces
+      certificateRefs:
+        - kind: Secret
+          name: faultycloud-xyz-tls
+
+# Redirect every plain-HTTP request on the web entrypoint (port 80) to HTTPS with a 301,
+# before any route matches. HTTPRoutes therefore never serve over HTTP, and they need no
+# redirect filter of their own. The HTTP listeners stay, so the redirect has a place to answer.
+# (Certificates come from DNS-01, so there is no HTTP-01 ACME traffic that needs plain HTTP.)
+ports:
+  web:
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+# @schema additionalProperties: false
+providers:
+  # -- Defines the routing precedence between providers. See [upstream documentation](https://doc.traefik.io/traefik/reference/install-configuration/providers/overview/#routing-precedence) for the default order.
+  precedence: []
+  # @schema additionalProperties: false
+  kubernetesCRD:
+    # -- Load Kubernetes IngressRoute provider
+    enabled: true
+    # -- Allows IngressRoute to reference resources in namespace other than theirs
+    allowCrossNamespace: false
+    # -- Allows to reference ExternalName services in IngressRoute
+    allowExternalNameServices: false
+    # -- Allows to return 503 when there are no endpoints available
+    allowEmptyServices: true
+    # -- List of namespaces from which IngressRoute, IngressRouteTCP, IngressRouteUDP, and TraefikService are allowed to declare cross-provider references. Requires traefik v3.7.1+.
+    crossProviderNamespaces: []
+    # -- Restricts the namespace where the cluster-wide TLSOption and TLSStore named `default` can be defined. When empty, any namespace is allowed. Requires traefik v3.7.11+.
+    defaultTLSResourcesNamespace: ""
+    # -- When the parameter is set, only resources containing an annotation with the same value are processed. Otherwise, resources missing the annotation, having an empty value, or the value traefik are processed. It will also set required annotation on Dashboard and Healthcheck IngressRoute when enabled.
+    ingressClass: ""
+    # -- See [upstream documentation](https://doc.traefik.io/traefik/reference/install-configuration/providers/kubernetes/kubernetes-ingress/#opt-providers-kubernetesIngress-labelselector)
+    labelSelector: ""
+    # -- Array of namespaces to watch. If left empty, Traefik watches all namespaces. . When using `rbac.namespaced`, it will watch helm release namespace and namespaces listed in this array.
+    namespaces: []
+    # -- Defines whether to use Native Kubernetes load-balancing mode by default.
+    nativeLBByDefault: false
+    # -- (bool) Enables collision-safe naming. Unset: Traefik default (logs a warning).  `false`: Explicitly opt out of safe naming (suppresses warning). `true`: Opt in to safe naming. ⚠️ It can be breaking, see [upstream documentation](https://doc.traefik.io/traefik/reference/install-configuration/providers/kubernetes/kubernetes-crd/#safenaming). Requires traefik v3.7.11+.
+    safeNaming: true  # @schema type:[boolean, null]
+
+  kubernetesIngress:
+    enabled: true
+
+  # Gateway API provider, standard channel only (matches the standard-install CRDs).
+  # Traefik Middlewares can still be attached to HTTPRoutes via ExtensionRef filters.
+  kubernetesGateway:
+    enabled: true
+    experimentalChannel: false
+
+api:
+  dashboard: true
+  
+global:
+  # Strip request headers whose names alias another (X_Auth_User / X.Auth.User -> X-Auth-User)
+  # on every entry point, so clients cannot spoof headers Traefik manages.
+  aliasHeadersStrategy: delete
+
+# Pin the LoadBalancer IP from Cilium LB IPAM (pool 192.168.3.200-204, cilium/base/lb-pool.yaml) so
+# DNS for *.faultycloud.xyz can point at a fixed address. Cilium answers ARP for it on ens4f0.
+service:
+  annotations:
+    lbipam.cilium.io/ips: "192.168.3.200"

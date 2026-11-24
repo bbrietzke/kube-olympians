@@ -1,0 +1,14 @@
+---
+# Forgejo's database inside cluster00, covered by its snapshot and Backblaze B2 backups.
+# Owner: the "forgejo" DatabaseRole (database-role.yaml).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: forgejo
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: forgejo
+  owner: forgejo
+  databaseReclaimPolicy: retain

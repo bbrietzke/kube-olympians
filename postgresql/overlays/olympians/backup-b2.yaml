@@ -1,0 +1,22 @@
+---
+# Weekly base backup of cluster00 to Backblaze B2 through the Barman Cloud plugin.
+# WAL is archived continuously in between (the Cluster's isWALArchiver plugin), so any point
+# since the oldest kept base backup can be restored. Retention (30d) is set on the ObjectStore.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: cluster00-b2-weekly
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  # CNPG cron has six fields, seconds first: Sundays at 04:00:00 UTC, after the 03:00 snapshot.
+  schedule: "0 0 4 * * 0"
+  # No immediate run: applied together with the plugin config, it would start before the instances
+  # have their barman-cloud sidecars and fail ("requested plugin is not available"). Instead,
+  # `make olympians` takes the first base backup once archiving is live (PITR needs at least one).
+  immediate: false
+  backupOwnerReference: none

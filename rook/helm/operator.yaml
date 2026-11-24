@@ -1,0 +1,19 @@
+# Values for the rook-ceph operator chart (https://charts.rook.io/release), pinned in ../Makefile.
+# Equivalent of overlays/prerequisites + operator.yaml from overlays/install.
+
+crds:
+  # The chart owns the Rook CRDs. Do not flip this off after the first install.
+  enabled: true
+
+csi:
+  # Install the ceph-csi-operator subchart (csi-operator.yaml in the kustomize route).
+  installCsiOperator: true
+
+ceph-csi-operator:
+  controllerManager:
+    manager:
+      env:
+        # The chart sets "", so the operator would run the driver pods as rbd-ctrlplugin-sa etc.,
+        # which nothing creates. helm/csi-drivers.yaml ships upstream's ceph-csi-* ServiceAccounts
+        # and RBAC; this prefix matches them (and the kustomize route's csi-operator.yaml).
+        csiServiceAccountPrefix: ceph-csi-

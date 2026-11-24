@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: rook-toolbox-kustomization
+namespace: rook-ceph
+resources:
+- https://raw.githubusercontent.com/rook/rook/refs/tags/v1.21.2/deploy/examples/toolbox.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize

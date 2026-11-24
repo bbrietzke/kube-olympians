@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: postgresql-plugin-barman-cloud-kustomization
+# CloudNativePG Barman Cloud plugin v0.16.0 (needs CNPG >= 1.30 and cert-manager for the
+# operator <-> plugin mTLS). Installs the ObjectStore CRD and the barman-cloud Deployment into
+# cnpg-system. Plugin and sidecar images are multi-arch (amd64 + arm64).
+# Release asset sha256 aee614683892dd4b44ff9f7afaca55254f1c28de17abbaa0552bf2e1228f7155.
+resources:
+- https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.16.0/manifest.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize

@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: harbor
+  labels:
+    # Lets Harbor's HTTPRoute attach to traefik-gateway (see traefik/helm/postCertManager.yaml).
+    olympians/traefik-gateway: allowed

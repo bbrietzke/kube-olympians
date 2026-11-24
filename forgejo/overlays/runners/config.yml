@@ -1,0 +1,43 @@
+# forgejo-runner v13 configuration template. The init container replaces @UUID@ and @TOKEN@
+# with the pod's own pre-shared credentials (Secret forgejo-runner).
+log:
+  level: info
+
+runner:
+  # One job at a time per runner, so jobs never share a dind daemon.
+  capacity: 1
+  timeout: 3h
+  fetch_timeout: 30s
+  fetch_interval: 2s
+  # Handed to every job container, so `docker build` / `docker push` in a job talk to the
+  # pod's dind daemon over TLS.
+  envs:
+    DOCKER_HOST: tcp://localhost:2376
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: /certs/client
+  # label:docker://image. Jobs run on the amd64 workers (ares, hades, hera).
+  labels:
+    - "docker:docker://node:22-bookworm"         # default; has node for JavaScript actions
+    - "ubuntu-latest:docker://node:22-bookworm"  # so `runs-on: ubuntu-latest` workflows run unchanged
+    - "docker-cli:docker://docker:28-cli"        # docker CLI for image builds (no node)
+
+cache:
+  enabled: true
+
+container:
+  # Job containers share the pod's network namespace: they reach dind on localhost:2376 and
+  # resolve names through the cluster DNS (e.g. harbor.faultycloud.xyz).
+  network: host
+  privileged: false
+  # The dind client certs, mounted from the dind container's filesystem into each job container.
+  options: -v /certs/client:/certs/client
+  valid_volumes:
+    - /certs/client
+
+server:
+  connections:
+    forgejo:
+      # In-cluster address: runners don't depend on LAN DNS for git.faultycloud.xyz.
+      url: http://forgejo-http.forgejo.svc:3000/
+      uuid: "@UUID@"
+      token: "@TOKEN@"

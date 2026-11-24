@@ -1,0 +1,18 @@
+---
+# Answer ARP for LoadBalancer and external IPs on lan0 (ens4f0), so the pool's addresses are
+# reachable from the LAN. Without a policy, Services get an IP that no node announces.
+# Cilium 1.20 serves this CRD only as v2alpha1.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: lan0-l2
+spec:
+  interfaces:
+    - ^ens4f0$
+  loadBalancerIPs: true
+  externalIPs: true
+  nodeSelector:
+    # Only the workers (ares, hades, hera) announce; zeus (control plane) is tainted and does not.
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist

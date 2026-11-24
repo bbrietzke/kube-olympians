@@ -1,0 +1,21 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cluster00
+  namespace: db
+spec:
+  instances: 3
+  postgresql:
+    parameters:
+      shared_buffers: "128MB"
+  storage:
+    size: 20Gi
+    storageClass: rook-ceph-ssd
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: 500m
+    limits:
+      memory: "2Gi"
+      cpu: "2"

@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: certificate-manager-install-kustomization
+# Upstream static install (CRDs included), patched to match helm/values.yaml.
+resources:
+- https://github.com/cert-manager/cert-manager/releases/download/v1.21.3/cert-manager.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+
+patches:
+- target:
+    kind: Deployment
+    name: cert-manager
+  patch: |-
+    # config.gatewayAPI.enabled
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --enable-gateway-api
+    # enableCertificateOwnerRef
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --enable-certificate-owner-ref=true

@@ -1,0 +1,50 @@
+# Values for the cilium chart (https://helm.cilium.io/), pinned in ../Makefile.
+# Network interfaces are auto-detected (k8s0 and lan0/ens4f0 both carry global addresses).
+ipam:
+  mode: kubernetes
+
+kubeProxyReplacement: true
+k8sServiceHost: localhost
+k8sServicePort: 7445
+
+cluster:
+  name: olympians
+  id: 1
+
+# LoadBalancer IPs are announced on lan0 by ARP (policy in base/l2-policy.yaml).
+l2announcements:
+  enabled: true
+
+# L2 announcements hold one Lease per Service; Cilium's docs recommend raising the client rate
+# limit from the defaults (qps 10 / burst 20) when they are on.
+k8sClientRateLimit:
+  qps: 50
+  burst: 100
+
+externalIPs:
+  enabled: true
+
+cgroup:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup
+
+securityContext:
+  capabilities:
+    ciliumAgent:
+      - CHOWN
+      - KILL
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    cleanCiliumState:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: certmanager-base-kustomized
+# The ClusterIssuer reads its Cloudflare token Secret from the cert-manager namespace.
+namespace: cert-manager
+resources:
+  - issuers.yaml
+
+# The Cloudflare API token comes from cloudflare.env, a local file kept out of git.
+# Copy cloudflare.env.example to cloudflare.env and fill in the token.
+secretGenerator:
+  - name: cloudflare-api-token-secret
+    envs:
+      - cloudflare.env
+    options:
+      # The ClusterIssuer refers to the Secret by this exact name.
+      disableNameSuffixHash: true

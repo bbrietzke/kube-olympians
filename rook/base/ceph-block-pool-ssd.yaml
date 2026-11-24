@@ -1,0 +1,33 @@
+---
+# The 1 TB WD Green SSD on each worker (3 replicas, one per host, ~930 GiB usable).
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: ssd-pool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  deviceClass: ssd
+  replicated:
+    size: 3
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-ssd          # The name your developers use in their PVCs
+provisioner: rook-ceph.rbd.csi.ceph.com 
+parameters:
+  clusterID: rook-ceph         # Namespace where your Rook cluster is deployed
+  pool: ssd-pool               # MUST match the metadata.name of your CephBlockPool
+  imageFormat: "2"
+  imageFeatures: layering
+
+  # CSI Secret configurations mapping to your Rook installation
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+reclaimPolicy: Delete          # Deletes the underlying Ceph image when the PVC is deleted
+allowVolumeExpansion: true     # Allows expanding PVC sizes on-the-fly

@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: forgejo-base-kustomization
+resources:
+  - namespace.yaml
+  - database-role.yaml
+  - database.yaml
+
+# Credentials come from local files kept out of git. `make prerequisites` generates them with
+# random values if they don't exist (templates: *.env.example).
+secretGenerator:
+  # PostgreSQL login for the "forgejo" role, read by CloudNativePG.
+  - name: forgejo-db-credentials
+    namespace: db
+    type: kubernetes.io/basic-auth
+    envs:
+      - forgejo-db.env
+    options:
+      disableNameSuffixHash: true
+  # The same password for Forgejo (FORGEJO__DATABASE__PASSWD, key "password").
+  - name: forgejo-database
+    namespace: forgejo
+    envs:
+      - forgejo-db.env
+    options:
+      disableNameSuffixHash: true
+  # Initial admin account (chart gitea.admin.existingSecret: keys username, password).
+  - name: forgejo-admin
+    namespace: forgejo
+    envs:
+      - forgejo-admin.env
+    options:
+      disableNameSuffixHash: true
+  # Pre-shared runner credentials (one uuid/token pair per runner; see overlays/runners).
+  - name: forgejo-runner
+    namespace: forgejo
+    envs:
+      - forgejo-runner.env
+    options:
+      disableNameSuffixHash: true

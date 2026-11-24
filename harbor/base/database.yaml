@@ -1,0 +1,16 @@
+---
+# Harbor's metadata database inside the CloudNativePG cluster00 (db namespace). It is covered by
+# cluster00's snapshot and Backblaze B2 backups. Its owner, the "harbor" login role, is the
+# DatabaseRole in database-role.yaml.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: harbor
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: harbor
+  owner: harbor
+  # Keep the database (and Harbor's data) if this object is deleted.
+  databaseReclaimPolicy: retain

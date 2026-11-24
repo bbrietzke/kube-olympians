@@ -1,0 +1,15 @@
+---
+# Ad-hoc base backup of cluster00 to Backblaze B2 (Barman Cloud plugin). Run it with
+# `make b2backup`, not by applying this overlay directly: the Makefile replaces the placeholder
+# name below with cluster00-b2-<SNAPSHOT_LABEL>-<UTC timestamp> so every run creates a new Backup.
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: cluster00-b2-placeholder
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

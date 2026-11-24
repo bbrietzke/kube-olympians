@@ -1,0 +1,13 @@
+---
+# LoadBalancer IPs handed out by Cilium LB IPAM: 192.168.3.200-204 on lan0 (outside the router's
+# DHCP range). Pinned with lbipam.cilium.io/ips so DNS can point at them:
+#   192.168.3.200  Traefik (traefik/helm/*.yaml)
+#   192.168.3.201  Forgejo SSH (forgejo/helm/values.yaml)
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: default-lb-pool
+spec:
+  blocks:
+    - start: "192.168.3.200"
+      stop: "192.168.3.204"

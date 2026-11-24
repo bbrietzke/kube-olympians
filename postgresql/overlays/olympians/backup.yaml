@@ -1,0 +1,22 @@
+---
+# Daily cold volume-snapshot backup of cluster00 (settings in the Cluster's spec.backup.volumeSnapshot).
+# Cold = a standby is fenced (Postgres stopped) while its PVC is snapshotted, so the snapshot is
+# self-consistent without a WAL archive. The primary keeps serving throughout.
+# CNPG has no retention for snapshot backups: old ones must be deleted by hand (or by a pruning job).
+# Deleting a Backup deletes its VolumeSnapshot (snapshotOwnerReference: backup), and
+# rook-ceph-snapclass's deletionPolicy: Delete then removes the Ceph snapshot too.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: cluster00-daily
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  method: volumeSnapshot
+  # CNPG cron has six fields, seconds first: 03:00:00 every day (UTC, the controller's clock).
+  schedule: "0 0 3 * * *"
+  # Take the first backup as soon as this is applied.
+  immediate: true
+  # Backups are not owned by the ScheduledBackup, so deleting or renaming the schedule keeps them.
+  backupOwnerReference: none

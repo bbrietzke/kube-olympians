@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../base
+- backup.yaml     # daily cold volume-snapshot ScheduledBackup
+- backup-b2.yaml  # weekly base backup to Backblaze B2 (WAL is archived continuously)
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+
+patches:
+- target:
+    kind: Cluster
+    name: cluster00
+  patch: |-
+    - op: replace
+      path: /spec/postgresql/parameters/shared_buffers
+      value: "256MB"   # must fit well inside the 2Gi memory limit (~25% is the usual rule)
+    - op: replace
+      path: /spec/resources/requests/cpu
+      value: "1000m"
+    - op: replace
+      path: /spec/resources/requests/memory
+      value: "500Mi"
+    - op: replace
+      path: /spec/resources/limits/cpu
+      value: "4000m"
+    - op: replace
+      path: /spec/resources/limits/memory
+      value: "2Gi"
+    - op: replace
+      path: /spec/storage/storageClass
+      value: "rook-ceph-ssd"   # not the default hdd class: those are SMR drives, slow for a database
+    - op: replace
+      path: /spec/storage/size
+      value: "64Gi"
+    # Volume-snapshot backups with no WAL archive: cold (online: false) is CNPG's recommendation,
+    # since a hot snapshot needs WAL from after the snapshot to be consistent. Backups run on a
+    # standby (target defaults to prefer-standby), never fencing the primary while one is healthy.
+    - op: add
+      path: /spec/backup
+      value:
+        target: prefer-standby
+        volumeSnapshot:
+          className: rook-ceph-snapclass
+          online: false
+          snapshotOwnerReference: backup
+    # Off-cluster backups: the Barman Cloud plugin archives every WAL segment to Backblaze B2
+    # (ObjectStore "backblaze" in base/) and takes the plugin base backups (backup-b2.yaml).
+    # Together they allow point-in-time recovery. serverName is the folder under the bucket path;
+    # a cluster restored from B2 must archive under a NEW serverName (see README).
+    - op: add
+      path: /spec/plugins
+      value:
+        - name: barman-cloud.cloudnative-pg.io
+          isWALArchiver: true
+          parameters:
+            barmanObjectName: backblaze
+            serverName: cluster00

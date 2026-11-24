@@ -1,0 +1,15 @@
+---
+# Ad-hoc volume-snapshot backup of cluster00. Run it with `make snapshot`, not by applying this
+# overlay directly: the Makefile replaces the placeholder name below with
+# cluster00-<SNAPSHOT_LABEL>-<UTC timestamp> so every run creates a new Backup.
+# How the snapshot is taken (cold, on a standby, rook-ceph-snapclass) comes from cluster00's
+# spec.backup.volumeSnapshot in overlays/olympians.
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: cluster00-snapshot-placeholder
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  method: volumeSnapshot

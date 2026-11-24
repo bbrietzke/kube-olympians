@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: snapshotter-install-kustomization
+# Common snapshot-controller (deploys into kube-system)
+resources:
+- https://github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=v8.7.0
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize

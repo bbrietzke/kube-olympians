@@ -1,0 +1,35 @@
+---
+# The 4 TB Seagate ST4000DM004 on each worker (3 replicas, one per host, ~3.6 TiB usable).
+# These are SMR drives: fine for bulk data, slow for sustained random writes and for recovery.
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: hdd-pool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  deviceClass: hdd
+  replicated:
+    size: 3
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-hdd          # The name your developers use for bulk storage
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"   # PVCs without storageClassName land here
+provisioner: rook-ceph.rbd.csi.ceph.com 
+parameters:
+  clusterID: rook-ceph
+  pool: hdd-pool               # MUST match the metadata.name of your CephBlockPool
+  imageFormat: "2"
+  imageFeatures: layering
+
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+reclaimPolicy: Delete
+allowVolumeExpansion: true

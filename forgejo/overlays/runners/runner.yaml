@@ -1,0 +1,115 @@
+---
+# Forgejo Actions runners: forgejo-runner v13.2.2 with a Docker-in-Docker sidecar.
+# Based on the upstream examples/kubernetes/dind-docker.yaml, with images updated and an
+# offline (pre-shared secret) registration: `make runners` registers each runner's secret with
+# Forgejo, and the init container writes config.yml with that runner's uuid/token, chosen by
+# the pod ordinal (forgejo-runner-0 -> token-0/uuid-0, ...). No .runner file is needed.
+#
+# Jobs run as containers on the pod's own dind daemon. That daemon is privileged: a job can
+# reach the node. Only trusted users can push to this Forgejo (registration is disabled).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: forgejo-runner
+  namespace: forgejo
+spec:
+  serviceName: forgejo-runner
+  replicas: 2
+  # Pods are independent runners; start/stop them in parallel.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: forgejo-runner
+  template:
+    metadata:
+      labels:
+        app: forgejo-runner
+    spec:
+      automountServiceAccountToken: false
+      # Spread the runners (and their privileged dind daemons) over different workers.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: forgejo-runner
+      initContainers:
+        - name: config
+          image: code.forgejo.org/forgejo/runner:13.2.2
+          command: [sh, -c]
+          args:
+            - |
+              set -eu
+              n="${POD_NAME##*-}"
+              uuid="$(cat /runner-secret/uuid-$n)"
+              token="$(cat /runner-secret/token-$n)"
+              sed -e "s|@UUID@|$uuid|" -e "s|@TOKEN@|$token|" /config-template/config.yml > /data/config.yml
+              echo "configured $POD_NAME as runner uuid $uuid"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - {name: runner-data, mountPath: /data}
+            - {name: config-template, mountPath: /config-template, readOnly: true}
+            - {name: runner-secret, mountPath: /runner-secret, readOnly: true}
+          securityContext: &restricted
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+      containers:
+        - name: runner
+          image: code.forgejo.org/forgejo/runner:13.2.2
+          command: [sh, -c]
+          args:
+            - |
+              # Wait for the dind sidecar's TLS endpoint.
+              until nc -z localhost 2376; do echo "waiting for docker"; sleep 2; done
+              exec forgejo-runner daemon --config /data/config.yml
+          env:
+            - {name: DOCKER_HOST, value: "tcp://localhost:2376"}
+            - {name: DOCKER_CERT_PATH, value: /certs/client}
+            - {name: DOCKER_TLS_VERIFY, value: "1"}
+          volumeMounts:
+            - {name: docker-certs, mountPath: /certs, readOnly: true}
+            - {name: runner-data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+          securityContext: *restricted
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+        - name: dind
+          image: docker.io/library/docker:28-dind
+          env:
+            # dind generates a CA and server/client certs here and serves TLS on :2376.
+            - {name: DOCKER_TLS_CERTDIR, value: /certs}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - {name: docker-certs, mountPath: /certs}
+            - {name: docker-data, mountPath: /var/lib/docker}
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "2", memory: 4Gi}
+      volumes:
+        - {name: docker-certs, emptyDir: {}}
+        - {name: runner-data, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        # Job images and build layers; kept for the pod's lifetime, so repeated jobs start faster.
+        - name: docker-data
+          emptyDir:
+            sizeLimit: 20Gi
+        - name: config-template
+          configMap:
+            name: forgejo-runner-config
+        - name: runner-secret
+          secret:
+            secretName: forgejo-runner

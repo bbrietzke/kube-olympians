@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: traefik-install-kustomization
+# Traefik has no plain-manifest install upstream, so the chart is inflated by kustomize.
+# Needs: kustomize build --enable-helm --load-restrictor LoadRestrictionsNone
+namespace: traefik
+
+resources:
+- namespace.yaml
+
+helmCharts:
+- name: traefik
+  repo: https://traefik.github.io/charts
+  version: 42.4.1
+  releaseName: traefik
+  namespace: traefik
+  includeCRDs: true
+  valuesFile: ../../helm/install.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
