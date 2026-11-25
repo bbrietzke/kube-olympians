@@ -40,8 +40,20 @@ All 26 targets were up:
 
 `Watchdog` always fires; that's the intended heartbeat.
 
+## Rook/Ceph (enabled 2026-11-25)
+- **Metrics:** `monitoring.enabled` in `rook/helm/operator.yaml` gives the Rook operator permission to create ServiceMonitors. In `rook/helm/cluster.yaml` it makes the operator create `rook-ceph-mgr` (ceph-mgr's Prometheus module) and `rook-ceph-exporter`, one per node with OSDs. All 4 targets are up.
+- **Alerts:** `createPrometheusRules` installs Ceph's **89 alert rules** (PrometheusRule `prometheus-ceph-rules` in `rook-ceph`): OSDs down, pools near full or over quota, slow ops, PG states…
+- **`CephHealthWarning` is overridden.** The stock rule fires on any `HEALTH_WARN`, and Ceph here is permanently `HEALTH_WARN` because of the `AUTH_INSECURE_*` checks: the legacy cephx key type kept for kernel 6.18. The override (`prometheusRuleOverrides` in `rook/helm/cluster.yaml`) fires once per active warning check **except** `AUTH_INSECURE_*`, and names the check:
+
+  ```
+  ceph_health_detail{severity="HEALTH_WARN", name!~"AUTH_INSECURE_.*"} == 1
+  ```
+
+  `CephHealthError` is unchanged. Drop the override once every node runs Linux 7.0+.
+- **Dashboards:** Grafana folder **Ceph** with Ceph Cluster (grafana.com 2842 rev 18), Ceph - OSD (5336 rev 9) and Ceph - Pools (5342 rev 9). They're pinned in `helm/values.yaml` (`grafana.dashboards`) and downloaded from grafana.com by Grafana's init container at startup.
+- **Install order (chicken and egg):** Rook's monitoring needs the Prometheus Operator CRDs, but `monitoring` needs Rook for its SSD volumes. On a rebuild from scratch, install rook with monitoring off first (comment out the two `monitoring` blocks), then `monitoring`, then run `make -C rook helm` again. That's left manual on purpose.
+
 ## Next integrations (not done yet)
-- **Rook/Ceph:** `monitoring.enabled: true` in the rook-ceph-cluster values adds its ServiceMonitor and Ceph alert rules.
 - **CloudNativePG:** a PodMonitor for cluster00 (`monitoring.enablePodMonitor` on the Cluster) and the CNPG Grafana dashboard.
 - **Cilium / Hubble:** `prometheus.enabled` and `serviceMonitor.enabled` in its values.
 - **Traefik:** a metrics ServiceMonitor from its chart values.

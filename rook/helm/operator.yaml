@@ -9,6 +9,11 @@ csi:
   # Install the ceph-csi-operator subchart (csi-operator.yaml in the kustomize route).
   installCsiOperator: true
 
+# Lets the operator create ServiceMonitors (RBAC). The monitors themselves come from the cluster
+# chart's monitoring block. Needs the Prometheus Operator CRDs (monitoring/) to exist first.
+monitoring:
+  enabled: true
+
 ceph-csi-operator:
   controllerManager:
     manager:

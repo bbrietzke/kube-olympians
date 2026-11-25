@@ -9,6 +9,25 @@ toolbox:
   # Use `make toolbox` instead.
   enabled: false
 
+# Prometheus integration (kube-prometheus-stack in monitoring/, which picks up monitors and rules
+# from every namespace). The operator creates ServiceMonitors for the ceph-mgr Prometheus module and
+# the Ceph exporter; createPrometheusRules installs Ceph's own alert rules (PrometheusRule
+# prometheus-ceph-rules in rook-ceph).
+monitoring:
+  enabled: true
+  createPrometheusRules: true
+  prometheusRuleOverrides:
+    # Ceph is permanently HEALTH_WARN here because of the AUTH_INSECURE_* checks: the cephx
+    # keyType: aes kept for kernel 6.18 (see cephClusterSpec.security below). The stock rule fires
+    # on any HEALTH_WARN (ceph_health_status == 1), so it would never clear. This version fires once
+    # per active warning check EXCEPT those, naming the check. Drop the override once the nodes run
+    # Linux 7.0+ and the legacy key type is gone. HEALTH_ERR (CephHealthError) is unchanged.
+    CephHealthWarning:
+      expr: 'ceph_health_detail{severity="HEALTH_WARN", name!~"AUTH_INSECURE_.*"} == 1'
+      annotations:
+        summary: Ceph health warning {{ $labels.name }} on cluster {{ $labels.cluster }}
+        description: The Ceph health check {{ $labels.name }} has been in HEALTH_WARN for more than 15 minutes on cluster {{ $labels.cluster }}. Run 'ceph health detail' for more information. (The AUTH_INSECURE_* checks are excluded on purpose; see rook/helm/cluster.yaml.)
+
 cephClusterSpec:
   security:
     cephx:
