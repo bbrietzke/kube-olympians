@@ -39,7 +39,7 @@ Standard targets (only where the component supports them):
 | forgejo | chart 17.3.3 → Forgejo 15.0.12 (LTS); forgejo-runner 13.2.2 | `forgejo` namespace (PSA `privileged`), Secrets (incl. runner secrets), `forgejo` DatabaseRole + Database (cluster00) | — | ✅ (Helm only) | — | `runners`, `password` (see `forgejo/README.md`) |
 | cloudflared | cloudflared 2026.11.2 | Cloudflare tunnel + token (by hand), traefik `postCertManager` | — | — | Connector Deployment (2 replicas, one per worker) + token Secret from git-ignored `cloudflared/base/cloudflared.env` | `whoami` (see `cloudflared/README.md`) |
 | brietzke-website | nginx-unprivileged 1.31.7 serving the Hugo site from the `brietzke-me/website` Forgejo repo | Image in Harbor (`library/brietzke-me`, built by Forgejo Actions), traefik `public` + cloudflared | — | — | `brietzke-me` namespace, Deployment (2 replicas), HTTPRoute `brietzke.me` on `traefik-public` | `deploy TAG=<sha12>` |
-| brietzke-video | MiroTalk C2C 1.5.10 (`mirotalk/c2c` pinned by digest) | traefik `public` + cloudflared | — | — | `mirotalk` namespace, 1 replica, HTTPRoute `video.brietzke.me` on `traefik-public`; STUN only, no TURN; API secret in git-ignored `brietzke-video/base/mirotalk.env` | (see `brietzke-video/README.md`) |
+| brietzke-video | MiroTalk C2C 1.5.10 (`mirotalk/c2c` pinned by digest) | traefik `public` + cloudflared | — | — | `mirotalk` namespace, 1 replica, HTTPRoute `video.brietzke.me` on `traefik-public` behind a shared basic-auth login (`make -C brietzke-video password`); STUN only, no TURN; API secret and login in git-ignored `brietzke-video/base/*.env` | (see `brietzke-video/README.md`) |
 
 ## Cluster
 Talos Linux v1.14, bootstrapped from `../talos_olympians`. Kubernetes v1.37.1, amd64, kernel 6.18.

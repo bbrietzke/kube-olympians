@@ -89,6 +89,13 @@ spec:
   hostnames:
     - video.brietzke.me
   rules:
-    - backendRefs:
+    - filters:
+        # Shared login (basic-auth.yaml).
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: basic-auth
+      backendRefs:
         - name: mirotalk
           port: 80

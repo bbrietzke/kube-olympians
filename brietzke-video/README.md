@@ -21,6 +21,16 @@
 - **Image:** upstream publishes only `:latest`, so `base/mirotalk.yaml` pins it by digest. To update, look up the new digest (`docker buildx imagetools inspect mirotalk/c2c:latest`), change it, and run `make olympians`.
 
 ## Access
-**Open to anyone with the URL.** Anyone can create rooms. Media doesn't touch the cluster, so the cost is signaling only. To restrict it later, put a Cloudflare Access application on `video.brietzke.me` (Zero Trust → Access → Applications) or enable MiroTalk's OIDC (`OIDC_*` keys).
+**One shared login (HTTP basic auth),** checked by Traefik before anything reaches MiroTalk. It's in `base/basic-auth.yaml`, a Traefik Middleware attached to the HTTPRoute. Send it to whoever you're calling. Browsers remember it for the session, including for the Socket.IO WebSocket.
 
-**Tested 2026-11-24 from outside:** the page returns 200, the Socket.IO WebSocket upgrade returns `101`, only `https://video.brietzke.me` gets a CORS allow-origin, and `/client-config` lists only the STUN server.
+| Task | Command (from `brietzke-video/`) |
+| --- | --- |
+| Show the login | `make password` |
+| Change it | edit `base/basic-auth.env`, then `make olympians` (it re-hashes because the file is newer) |
+
+- **What lives where:** `base/basic-auth.env` (git-ignored, generated) holds the plaintext. Only a bcrypt hash goes into the cluster, as Secret `mirotalk-basic-auth` built from `base/basic-auth.htpasswd` (git-ignored). `removeHeader: true` strips the `Authorization` header, so MiroTalk never sees the password.
+- **It's a shared password.** Anyone you give it to can keep using it until you change it. Changing it is quick, but it locks everyone out until they get the new one.
+- **It's only as private as the TLS around it.** Basic auth sends the password with every request, protected by HTTPS between the browser and Cloudflare. Cloudflare decrypts it at its edge, and it travels the tunnel to Traefik.
+- **Stronger option:** a Cloudflare Access application on `video.brietzke.me` with a per-email one-time-PIN policy. It's per person, revocable, and enforced at Cloudflare's edge before the tunnel. The two can be stacked.
+
+**Tested 2026-11-24 from outside:** without the login, the page, its assets and the WebSocket all get `401`, and a wrong password also gets `401`. With the login, the page returns 200, the Socket.IO WebSocket upgrade returns `101`, only `https://video.brietzke.me` gets a CORS allow-origin, and `/client-config` lists only the STUN server.
