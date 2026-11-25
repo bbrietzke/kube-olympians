@@ -1,0 +1,30 @@
+# Pocket ID's PostgreSQL login role and database in CloudNativePG cluster00, as separate objects so
+# cluster00's own spec (owned by the postgresql component) is never touched. Covered by cluster00's
+# snapshot and Backblaze B2 backups: users, passkeys, OIDC clients and uploads all live here.
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pocketid
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: pocketid
+  comment: Pocket ID (pocket-id namespace), owner of the pocketid database
+  ensure: present
+  login: true
+  passwordSecret:
+    name: pocketid-db-credentials
+  databaseRoleReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pocketid
+  namespace: db
+spec:
+  cluster:
+    name: cluster00
+  name: pocketid
+  owner: pocketid
+  databaseReclaimPolicy: retain

@@ -1,0 +1,23 @@
+# Pocket ID settings (https://pocket-id.org/docs/configuration/environment-variables). Secrets
+# (ENCRYPTION_KEY, DB_CONNECTION_STRING) come from the pocket-id-secrets Secret instead.
+# Everything under "Application Configuration" (signups, SMTP, session length, ...) is set in the
+# admin UI and stored in the database.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pocket-id-config
+  namespace: pocket-id
+data:
+  # Must be the exact public URL: passkeys are bound to this domain.
+  APP_URL: https://auth.brietzke.me
+  # Requests arrive from Traefik (a pod); the visitor's address is Cloudflare's CF-Connecting-IP.
+  TRUST_PROXY: 10.254.0.0/22
+  TRUSTED_PLATFORM: CF-Connecting-IP
+  # Uploads (logos, profile pictures) in PostgreSQL too, so the pod keeps no state.
+  FILE_BACKEND: database
+  # Only https:// redirect URLs for OIDC clients (the docs recommend false; the default is true).
+  ALLOW_INSECURE_CALLBACK_URLS: "false"
+  ANALYTICS_DISABLED: "true"
+  LOG_JSON: "true"
+  LOG_LEVEL: info
+  TZ: America/Chicago

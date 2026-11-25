@@ -88,14 +88,8 @@ spec:
     - {name: traefik-public, namespace: traefik}
   hostnames:
     - video.brietzke.me
+  # No auth at Traefik: MiroTalk logs users in itself, through Pocket ID (OIDC).
   rules:
-    - filters:
-        # Shared login (basic-auth.yaml).
-        - type: ExtensionRef
-          extensionRef:
-            group: traefik.io
-            kind: Middleware
-            name: basic-auth
-      backendRefs:
+    - backendRefs:
         - name: mirotalk
           port: 80

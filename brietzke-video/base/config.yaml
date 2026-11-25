@@ -33,4 +33,14 @@ data:
   EMAIL_ALERT: "false"
   SENTRY_ENABLED: "false"
   MATTERMOST_ENABLED: "false"
-  OIDC_ENABLED: "false"
+  # Login through Pocket ID (brietzke-auth). With OIDC_AUTH_REQUIRED=false, only logged-in users
+  # can CREATE a room; guests can join a room that already exists, without an account.
+  # OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / SESSION_SECRET are in mirotalk-secrets (mirotalk.env).
+  # In Pocket ID the client's callback URL is https://video.brietzke.me/auth/callback.
+  OIDC_ENABLED: "true"
+  OIDC_ISSUER_BASE_URL: https://auth.brietzke.me
+  OIDC_BASE_URL: https://video.brietzke.me
+  OIDC_BASE_URL_DYNAMIC: "false"
+  OIDC_AUTH_REQUIRED: "false"
+  # true calls Auth0's own logout endpoint, which Pocket ID doesn't have.
+  OIDC_AUTH_LOGOUT: "false"

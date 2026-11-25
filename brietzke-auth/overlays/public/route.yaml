@@ -1,0 +1,16 @@
+# auth.brietzke.me through the Cloudflare tunnel. Until the first account exists, Pocket ID's
+# /setup page lets ANYONE create the admin, so publish only when you'll claim it right away.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pocket-id
+  namespace: pocket-id
+spec:
+  parentRefs:
+    - {name: traefik-public, namespace: traefik}
+  hostnames:
+    - auth.brietzke.me
+  rules:
+    - backendRefs:
+        - name: pocket-id
+          port: 80
