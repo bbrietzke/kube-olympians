@@ -1,0 +1,11 @@
+# kube-prometheus-stack. node-exporter uses the host's network, PID namespace and root filesystem,
+# so Pod Security has to allow privileged pods here. The UIs are LAN-only on traefik-gateway.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    olympians/traefik-gateway: allowed
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
