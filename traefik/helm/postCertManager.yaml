@@ -59,6 +59,18 @@ gateway:
       certificateRefs:
         - kind: Secret
           name: faultycloud-xyz-tls
+    # Virtual-hosted-style S3 (<bucket>.s3.faultycloud.xyz, the Ceph RGW store "s3" in rook/).
+    # A wildcard certificate covers one label only, so these names need their own certificate;
+    # s3.faultycloud.xyz itself is covered by the listeners above. Plain HTTP is redirected to
+    # HTTPS on the web entrypoint before routing, so no HTTP listener is needed for it.
+    websecure-s3:
+      port: 8443
+      hostname: "*.s3.faultycloud.xyz"
+      protocol: HTTPS
+      namespacePolicy: *routeNamespaces
+      certificateRefs:
+        - kind: Secret
+          name: s3-faultycloud-xyz-tls
 
 # Redirect every plain-HTTP request on the web entrypoint (port 80) to HTTPS with a 301,
 # before any route matches. HTTPRoutes therefore never serve over HTTP, and they need no

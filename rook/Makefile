@@ -37,9 +37,13 @@ helm: ## Install the Rook operator and the CephCluster with Helm; waits for a Re
 		-n $(NAMESPACE) -f helm/cluster.yaml
 	$(wait_ceph)
 
-olympians: ## Apply hdd-pool + the default rook-ceph-hdd StorageClass and ssd-pool + rook-ceph-ssd; waits for both pools
+olympians: ## Apply hdd-pool/ssd-pool (+ StorageClasses) and the "s3" object store (500Gi quota) + rook-ceph-bucket + https://s3.faultycloud.xyz; waits for them
+	@# Lets the s3 HTTPRoute attach to traefik-gateway (s3.faultycloud.xyz).
+	$(KUBECTL) label namespace $(NAMESPACE) --overwrite olympians/traefik-gateway=allowed
 	$(call kapply,overlays/olympians)
 	$(KUBECTL) -n $(NAMESPACE) wait cephblockpool/hdd-pool cephblockpool/ssd-pool --for=jsonpath='{.status.phase}'=Ready --timeout=$(WAIT_TIMEOUT)
+	$(KUBECTL) -n $(NAMESPACE) wait cephobjectstore/s3 --for=jsonpath='{.status.phase}'=Ready --timeout=$(WAIT_TIMEOUT)
+	$(KUBECTL) -n $(NAMESPACE) wait httproute/s3 --for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True --timeout=$(WAIT_TIMEOUT)
 
 toolbox: ## Deploy the rook-ceph-tools pod
 	$(call kinstall,overlays/toolbox)

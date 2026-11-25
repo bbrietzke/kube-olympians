@@ -1,0 +1,63 @@
+---
+# S3-compatible object store (Ceph RGW), named "s3". In-cluster endpoint:
+#   http://rook-ceph-rgw-s3.rook-ceph.svc:80
+# Buckets come from ObjectBucketClaims on the rook-ceph-bucket StorageClass below (or from S3
+# credentials of a CephObjectStoreUser).
+#
+# Metadata (bucket indexes, users, logs) is small and latency-sensitive: replicated on the WD SSDs.
+# Object data goes on the Seagate HDDs, replicated across the three workers. Erasure coding isn't
+# used: on three hosts the most is 2+1, which stops accepting writes whenever a worker is down.
+#
+# Capacity ceiling: a pool quota on the data pool. At 500Gi of stored data (before replication,
+# so about 1.5 TiB raw at size 3) Ceph marks the pool full and new writes fail; reads and deletes
+# keep working, and hdd-pool / ssd-pool are unaffected. Change maxSize and re-run `make olympians`.
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: s3
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    failureDomain: host
+    deviceClass: ssd
+    replicated:
+      size: 3
+  dataPool:
+    failureDomain: host
+    deviceClass: hdd
+    replicated:
+      size: 3
+    quotas:
+      maxSize: 500Gi
+  # Keep the pools (and the data) if this CR is ever deleted by mistake.
+  preservePoolsOnDelete: true
+  # Hostnames RGW accepts. With s3.faultycloud.xyz listed, <bucket>.s3.faultycloud.xyz is parsed as
+  # virtual-hosted-style (bucket from the hostname); s3.faultycloud.xyz/<bucket> is path-style.
+  # Rook adds the in-cluster Service name automatically, so bucket claims keep using
+  # http://rook-ceph-rgw-s3.rook-ceph.svc. RGW rejects any other Host.
+  hosting:
+    dnsNames:
+      - s3.faultycloud.xyz
+  gateway:
+    port: 80
+    instances: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+---
+# Bucket provisioning: an ObjectBucketClaim with this class gets a new bucket in the "s3" store, plus
+# a Secret (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) and a ConfigMap (BUCKET_HOST / BUCKET_PORT /
+# BUCKET_NAME) named after the claim. Per-bucket limits go in the claim's additionalConfig
+# (maxSize, maxObjects). Delete: the bucket is removed with its claim.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-bucket
+provisioner: rook-ceph.ceph.rook.io/bucket
+parameters:
+  objectStoreName: s3
+  objectStoreNamespace: rook-ceph
+reclaimPolicy: Delete

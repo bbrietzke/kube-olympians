@@ -6,6 +6,8 @@ namespace: rook-ceph
 resources:
   - ceph-block-pool-hdd.yaml
   - ceph-block-pool-ssd.yaml
+  - ceph-object-store.yaml
+  - ceph-object-store-route.yaml
 labels:
   - includeSelectors: true
     pairs:

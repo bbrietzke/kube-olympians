@@ -31,7 +31,7 @@ Standard targets (only where the component supports them):
 |---|---|---|---|---|---|---|
 | cilium | 1.20.5 | — | — | ✅ (Helm only) | `default-lb-pool` (192.168.3.200–204) + `lan0-l2` L2 announcements on `ens4f0` | `uninstall-olympians` |
 | external-snapshotter | v8.7.0 | snapshot CRDs | snapshot-controller (kube-system) | no upstream chart | default `rook-ceph-snapclass` VolumeSnapshotClass | |
-| rook | v1.21.2 | CRDs, common (namespace labeled PSA `privileged`), csi-operator | ✅ (upstream examples, patched) | ✅ (operator + cluster charts) | `hdd-pool` + default `rook-ceph-hdd`, `ssd-pool` + `rook-ceph-ssd` | `toolbox` |
+| rook | v1.21.2 | CRDs, common (namespace labeled PSA `privileged`), csi-operator | ✅ (upstream examples, patched) | ✅ (operator + cluster charts) | object store `s3` (500 GiB quota) + `rook-ceph-bucket`, `hdd-pool` + default `rook-ceph-hdd`, `ssd-pool` + `rook-ceph-ssd` | `toolbox` |
 | traefik | chart 42.4.1 | Gateway API v1.7.0 CRDs | ✅ (kustomize inflates the chart) | ✅ | — | `postCertManager` (Helm route only) |
 | certificateManager | v1.21.3 | Gateway API CRDs (from traefik) | ✅ (upstream manifest, patched) | ✅ | Cloudflare token Secret + `letsencrypt-dns01` ClusterIssuer | |
 | postgresql | CloudNativePG v1.30.2 (chart 0.29.2) + Barman Cloud plugin v0.16.0 | — | ✅ (upstream manifests) | ✅ (plugin via kustomize) | `db` namespace + `cluster00` (3 instances on `rook-ceph-ssd`) + daily snapshot backup + WAL archive and weekly base backup to Backblaze B2 (key in git-ignored `postgresql/base/backblaze.env`) | `snapshot`, `b2backup`, `snapshots` (see `postgresql/README.md`) |
@@ -64,11 +64,30 @@ Talos Linux v1.14, bootstrapped from `../talos_olympians`. Kubernetes v1.37.1, a
 | `rook-ceph-hdd` (**default**) | StorageClass, dynamic | Ceph RBD, `hdd-pool`: 3 replicas across the workers' 4 TB Seagate HDDs, ~3.6 TiB usable | Bulk data (Harbor's image layers, anything without a class) |
 | `rook-ceph-ssd` | StorageClass, dynamic | Ceph RBD, `ssd-pool`: 3 replicas across the workers' 1 TB WD Green SSDs, ~930 GiB usable | Databases and latency-sensitive volumes (`cluster00`, Forgejo's repositories) |
 | `rook-ceph-snapclass` (**default**) | VolumeSnapshotClass, `deletionPolicy: Delete` | Ceph RBD snapshots (copy-on-write) | Snapshots of either class, CNPG backups |
+| `rook-ceph-bucket` | StorageClass for ObjectBucketClaims | Ceph RGW object store `s3`: data in `s3.rgw.buckets.data` (HDD, 3 replicas, **500 GiB quota**), metadata pools on SSD | S3 buckets for apps. In-cluster endpoint `http://rook-ceph-rgw-s3.rook-ceph.svc:80` |
 
 - Both classes use `reclaimPolicy: Delete`. Deleting a PVC deletes its data.
 - **The HDDs are SMR** (Seagate ST4000DM004). Sequential and read-heavy use is fine. Sustained random writes, and Ceph backfill after a disk or node loss, are slow. Put databases on `rook-ceph-ssd`.
 - OSDs are selected by WWN (`devicePathFilter: ^/dev/disk/by-id/wwn-0x(5001b448|5000c500)`: WD and Seagate), not by `sdX`, because kernel disk names can change between boots. The Micron system disk (`0x500a0751…`) never matches. Talos landed on the Micron even though `../talos_olympians/worker-disk.yaml` selects `/dev/sdb`. Ceph sets the `ssd` / `hdd` device class from each disk's rotational flag.
 - With three hosts and `size: 3`, each pool keeps serving with one worker down (`min_size: 2`), but can't heal until it returns.
+- **Object store `s3`** (`rook/base/ceph-object-store.yaml`):
+  - One RGW gateway. Data is replicated ×3 on the HDDs. Erasure coding isn't used: the most three hosts allow is 2+1, which stops accepting writes while a worker is down.
+  - **Capacity ceiling:** a pool quota of **500 GiB of stored data** on the data pool, about 1.5 TiB raw at size 3. At the quota, new writes fail and reads and deletes keep working. The block pools are unaffected. To change it, edit `dataPool.quotas.maxSize` and run `make -C rook olympians`.
+  - **Getting a bucket:** create an `ObjectBucketClaim` with `storageClassName: rook-ceph-bucket`. It produces a Secret (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) and a ConfigMap (`BUCKET_HOST`, `BUCKET_PORT`, `BUCKET_NAME`), both named after the claim.
+  - **Per-claim limits:** `additionalConfig.maxSize` / `maxObjects` are applied as a quota on the **claim's own user**, not on the bucket. Each claim gets its own user, so in practice they limit that bucket. Over the limit, uploads get `403 QuotaExceeded`.
+  - Deleting a claim deletes its bucket and its data (`reclaimPolicy: Delete`).
+  - `preservePoolsOnDelete: true` keeps the pools if the `CephObjectStore` itself is deleted.
+  - **On the LAN, HTTPS only** (`rook/base/ceph-object-store-route.yaml`). It isn't reachable through the Cloudflare tunnel:
+    - **path-style:** `https://s3.faultycloud.xyz/<bucket>/<key>`, using the existing `*.faultycloud.xyz` certificate.
+    - **virtual-hosted-style:** `https://<bucket>.s3.faultycloud.xyz/<key>`, which AWS SDKs use by default. A wildcard certificate covers only one level of names, so this has its own listener (`websecure-s3`) and certificate (`s3-faultycloud-xyz-tls`) in `traefik/helm/postCertManager.yaml`.
+    - **Bucket from the hostname:** `hosting.dnsNames: [s3.faultycloud.xyz]` tells RGW to read the bucket name from the hostname. RGW then rejects any `Host` it doesn't know, except the in-cluster Service name, which Rook adds automatically.
+    - **Route attachment:** `make olympians` labels the `rook-ceph` namespace `olympians/traefik-gateway=allowed`.
+    - **Bucket claims** still return the in-cluster endpoint, `rook-ceph-rgw-s3.rook-ceph.svc:80`.
+  - **Tested 2026-11-25:**
+    - Upload, list and read back through a claim.
+    - A claim with `maxSize: 1M` accepted 300 KB and rejected 3 MB with `QuotaExceeded`.
+    - Over `https://s3.faultycloud.xyz`: a path-style upload, a virtual-hosted read-back, and a 200 MB multipart upload in 5 s.
+    - The certificate matches each name, and HTTP gets a 301 to HTTPS.
 
 ## Order
 Running `make install` (kustomize) or `make helm` at the repo root installs everything in dependency order:
@@ -91,7 +110,7 @@ The root targets stop there. Four more steps are manual, in this order:
 - `make -C brietzke-auth olympians publish` runs Pocket ID at `https://auth.brietzke.me`, the passkey-only OIDC login for `brietzke.me` apps. Its data is in a `pocketid` database in cluster00. Apps log users in themselves, so Traefik does no authentication. After the first `publish`, claim the admin at `/setup` immediately (see `brietzke-auth/README.md`).
 - `make -C brietzke-video olympians` serves MiroTalk C2C video calls at `https://video.brietzke.me` (public, experimental). Creating a room needs a Pocket ID login; guests join existing rooms without one. The web app and signaling go through the tunnel, and media goes browser to browser with public STUN and no TURN (see `brietzke-video/README.md`). Needs brietzke-auth.
 
-After `postCertManager`, `traefik-gateway` has four listeners: `web` and `websecure` for `faultycloud.xyz`, plus `web-wildcard` and `websecure-wildcard` for `*.faultycloud.xyz`. A wildcard listener doesn't match the bare domain, hence the pairs. Both HTTPS listeners share the `faultycloud-xyz-tls` certificate, which covers both names. An HTTPRoute can attach only from a namespace labeled `olympians/traefik-gateway=allowed`:
+After `postCertManager`, `traefik-gateway` has five listeners: `web` and `websecure` for `faultycloud.xyz`, `web-wildcard` and `websecure-wildcard` for `*.faultycloud.xyz`, and `websecure-s3` for `*.s3.faultycloud.xyz` (the S3 store's bucket names, with its own certificate `s3-faultycloud-xyz-tls`). A wildcard listener doesn't match the bare domain, hence the pairs. Both HTTPS listeners share the `faultycloud-xyz-tls` certificate, which covers both names. An HTTPRoute can attach only from a namespace labeled `olympians/traefik-gateway=allowed`:
 
 ```sh
 kubectl label namespace <ns> olympians/traefik-gateway=allowed
