@@ -1,0 +1,36 @@
+# MiroTalk C2C settings, as environment variables. The image also bakes in .env.template as
+# /src/.env, which dotenv loads WITHOUT overriding variables already set here, so anything not
+# set below falls back to the template. Notably the template enables TURN with a shared
+# third-party (metered.ca) account, hence TURN_SERVER_ENABLED=false.
+# All keys: https://github.com/miroslavpejic85/mirotalkc2c/blob/main/.env.template
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mirotalk-config
+  namespace: mirotalk
+data:
+  NODE_ENV: production
+  PORT: "8080"
+  HOST: https://video.brietzke.me     # only used for the API docs link and logs
+  TRUST_PROXY: "true"                  # behind Traefik + Cloudflare; client IPs from X-Forwarded-For
+  TZ: America/Chicago
+  LOGS_JSON: "true"
+  # JSON list of origins; a bare URL fails to parse and silently falls back to "*".
+  CORS_ORIGIN: '["https://video.brietzke.me"]'
+  ALLOWED_EMBED_ORIGINS: self          # no embedding in other sites
+  # ICE: public STUN only. Calls between two strict (symmetric) NATs will fail without TURN;
+  # coturn can't go through the Cloudflare tunnel (it needs UDP at a public IP).
+  STUN_SERVER_ENABLED: "true"
+  STUN_SERVER_URL: stun:stun.l.google.com:19302
+  TURN_SERVER_ENABLED: "false"
+  TURN_SERVER_URL: ""
+  TURN_SERVER_USERNAME: ""
+  TURN_SERVER_CREDENTIAL: ""
+  # Template defaults that phone home or point at mirotalk.com
+  SURVEY_URL: ""
+  REDIRECT_URL: ""
+  NGROK_ENABLED: "false"
+  EMAIL_ALERT: "false"
+  SENTRY_ENABLED: "false"
+  MATTERMOST_ENABLED: "false"
+  OIDC_ENABLED: "false"

@@ -1,0 +1,94 @@
+# MiroTalk C2C (https://github.com/miroslavpejic85/mirotalkc2c, AGPL-3.0): two-person WebRTC
+# calls. This pod only serves the web app and Socket.IO signaling; audio/video flows browser to
+# browser. Upstream publishes only :latest, so the image is pinned by digest (v1.5.10).
+#
+# ONE replica: rooms and peers live in the process's memory, so both sides of a call must reach
+# the same pod (Recreate strategy for the same reason).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirotalk
+  namespace: mirotalk
+  labels:
+    app.kubernetes.io/name: mirotalk
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mirotalk
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mirotalk
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mirotalk
+          image: docker.io/mirotalk/c2c:latest@sha256:0d634ed45a9a28962faaa90c00cd269916f4f5170b5f70753d7696f000c477e3
+          envFrom:
+            - configMapRef:
+                name: mirotalk-config
+            - secretRef:
+                name: mirotalk-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          # No health endpoint upstream; the home page is static and cheap.
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 20m, memory: 96Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirotalk
+  namespace: mirotalk
+spec:
+  selector:
+    app.kubernetes.io/name: mirotalk
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Socket.IO uses WebSocket upgrades, which Cloudflare, cloudflared and Traefik all pass through.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mirotalk
+  namespace: mirotalk
+spec:
+  parentRefs:
+    - {name: traefik-public, namespace: traefik}
+  hostnames:
+    - video.brietzke.me
+  rules:
+    - backendRefs:
+        - name: mirotalk
+          port: 80

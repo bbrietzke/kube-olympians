@@ -11,6 +11,7 @@ include common.mk
 #   forgejo              - git forge + Actions runners; manual (`make -C forgejo helm runners`), needs cluster00 + traefik postCertManager
 #   cloudflared          - Cloudflare Tunnel to the traefik-public Gateway (brietzke.me); manual (`make -C cloudflared olympians`), needs traefik postCertManager
 #   brietzke-website     - brietzke.me (Hugo site from Forgejo brietzke-me/website, image in Harbor) on traefik-public; manual (`make -C brietzke-website deploy TAG=<sha12>`), needs cloudflared
+#   brietzke-video       - MiroTalk C2C video calls at video.brietzke.me on traefik-public (STUN only); manual (`make -C brietzke-video olympians`), needs cloudflared
 #
 # Per-component targets: make -C <component> help
 
@@ -36,6 +37,7 @@ helm: ## Install every component with Helm where a chart exists (kustomize other
 # Remove it on purpose with `make -C cilium uninstall-helm`.
 
 uninstall: ## Tear down everything installed by `make install` (except Cilium)
+	-$(MAKE) -C brietzke-video uninstall
 	-$(MAKE) -C brietzke-website uninstall
 	-$(MAKE) -C cloudflared uninstall
 	-$(MAKE) -C forgejo uninstall-helm
@@ -48,6 +50,7 @@ uninstall: ## Tear down everything installed by `make install` (except Cilium)
 	-$(MAKE) -C cilium uninstall-olympians
 
 uninstall-helm: ## Tear down everything installed by `make helm` (except Cilium)
+	-$(MAKE) -C brietzke-video uninstall
 	-$(MAKE) -C brietzke-website uninstall
 	-$(MAKE) -C cloudflared uninstall
 	-$(MAKE) -C forgejo uninstall-helm
