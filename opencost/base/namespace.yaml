@@ -1,0 +1,10 @@
+# OpenCost: cost allocation for the cluster. UI LAN-only on traefik-gateway (opencost.faultycloud.xyz).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opencost
+  labels:
+    olympians/traefik-gateway: allowed
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

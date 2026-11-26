@@ -10,6 +10,7 @@ include common.mk
 #   harbor               - container registry; manual (`make -C harbor helm`), needs cluster00 + traefik postCertManager
 #   forgejo              - git forge + Actions runners; manual (`make -C forgejo helm runners`), needs cluster00 + traefik postCertManager
 #   monitoring           - kube-prometheus-stack (Prometheus, Alertmanager, Grafana), LAN only; manual (`make -C monitoring helm`)
+#   opencost             - cost allocation (cloud-equivalent prices) exported to Prometheus/Grafana; manual (`make -C opencost helm`), needs monitoring
 #   cloudflared          - Cloudflare Tunnel to the traefik-public Gateway (brietzke.me); manual (`make -C cloudflared olympians`), needs traefik postCertManager
 #   brietzke-website     - brietzke.me (Hugo site from Forgejo brietzke-me/website, image in Harbor) on traefik-public; manual (`make -C brietzke-website deploy TAG=<sha12>`), needs cloudflared
 #   brietzke-auth        - Pocket ID (passkey OIDC login for brietzke.me apps) at auth.brietzke.me; manual (`make -C brietzke-auth olympians publish`), needs cluster00 + cloudflared
@@ -39,6 +40,7 @@ helm: ## Install every component with Helm where a chart exists (kustomize other
 # Remove it on purpose with `make -C cilium uninstall-helm`.
 
 uninstall: ## Tear down everything installed by `make install` (except Cilium)
+	-$(MAKE) -C opencost uninstall-helm
 	-$(MAKE) -C monitoring uninstall-helm
 	-$(MAKE) -C brietzke-video uninstall
 	-$(MAKE) -C brietzke-auth uninstall
@@ -54,6 +56,7 @@ uninstall: ## Tear down everything installed by `make install` (except Cilium)
 	-$(MAKE) -C cilium uninstall-olympians
 
 uninstall-helm: ## Tear down everything installed by `make helm` (except Cilium)
+	-$(MAKE) -C opencost uninstall-helm
 	-$(MAKE) -C monitoring uninstall-helm
 	-$(MAKE) -C brietzke-video uninstall
 	-$(MAKE) -C brietzke-auth uninstall

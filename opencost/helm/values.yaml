@@ -1,0 +1,87 @@
+# OpenCost (https://github.com/opencost/opencost-helm-chart), pinned in ../Makefile.
+# Reads usage from kube-prometheus-stack's Prometheus (monitoring/) and exports its own cost
+# metrics back to it through a ServiceMonitor, for the Grafana dashboard in base/.
+
+# Despite the name, the chart uses this as the cluster's DNS domain in service URLs
+# (<svc>.<ns>.svc.<clusterName>), so it must stay cluster.local. The cluster's name in cost data is
+# opencost.exporter.defaultClusterId below.
+clusterName: cluster.local
+
+# Restricted Pod Security (the namespace enforces it); the chart leaves these empty.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+opencost:
+  exporter:
+    defaultClusterId: olympians
+    securityContext: &restricted
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      capabilities:
+        drop: ["ALL"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+
+  # Prices: cloud-equivalent, i.e. OpenCost's own defaults (configs/default.json: GCP us-central1
+  # list prices), set explicitly because the chart's example costModel is deliberately inflated
+  # (~40x CPU, ~4500x storage). Units: USD per vCPU-hour, per GiB-RAM-hour, per GPU-hour and per
+  # GiB-storage-hour (one price for every StorageClass); egress in USD per GiB.
+  # So: ~$23/vCPU-month, ~$3.09/GiB-RAM-month, ~$0.04/GiB-storage-month (x730 hours).
+  customPricing:
+    enabled: true
+    provider: custom
+    costModel:
+      description: Cloud-equivalent pricing (OpenCost defaults, GCP us-central1 list prices)
+      CPU: 0.031611
+      spotCPU: 0.006655
+      RAM: 0.004237
+      spotRAM: 0.000892
+      GPU: 0.95
+      storage: 0.00005479452
+      zoneNetworkEgress: 0.01
+      regionNetworkEgress: 0.01
+      internetNetworkEgress: 0.12
+
+  prometheus:
+    internal:
+      enabled: true
+      serviceName: kube-prometheus-stack-prometheus
+      namespaceName: monitoring
+      port: 9090
+
+  # OpenCost's own metrics (node_*_hourly_cost, pv_hourly_cost, container_*_allocation, ...) for
+  # Prometheus. 1m interval and honorLabels as OpenCost's docs recommend: the metrics carry their
+  # own namespace/pod/node labels, which must not be overwritten with the target's.
+  metrics:
+    serviceMonitor:
+      enabled: true
+      scrapeInterval: 1m
+      scrapeTimeout: 10s
+      honorLabels: true
+
+  ui:
+    enabled: true
+    securityContext:
+      <<: *restricted
+      # The UI image is built to run as 1001:1000, which owns /var/www and /etc/nginx; its entrypoint
+      # rewrites files there with sed (BASE_URL), and nginx writes temp files and its pid under the
+      # root filesystem. The pod-level runAsUser 1000 would leave it unable to (Permission denied).
+      runAsUser: 1001
+      runAsGroup: 1000
+      readOnlyRootFilesystem: false
+    httpRoute:
+      enabled: true
+      parentRefs:
+        - name: traefik-gateway
+          namespace: traefik
+      hostnames:
+        - opencost.faultycloud.xyz
