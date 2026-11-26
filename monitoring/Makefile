@@ -6,13 +6,16 @@ NAMESPACE     := monitoring
 CHART_REPO    := https://prometheus-community.github.io/helm-charts
 CHART_VERSION := 93.11.0
 ADMIN_ENV     := base/grafana-admin.env
+PUSHOVER_ENV  := base/pushover.env
 
 .PHONY: prerequisites helm password uninstall-helm
 
-prerequisites: ## Generate the Grafana admin password if missing; apply the namespace and its Secret
+prerequisites: ## Generate the Grafana admin password if missing; require base/pushover.env; apply the namespace and Secrets
 	@test -f $(ADMIN_ENV) || { printf 'admin-user=admin\nadmin-password=%s\n' "$$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)" > $(ADMIN_ENV); \
 		chmod 600 $(ADMIN_ENV); echo "generated $(ADMIN_ENV)"; }
 	@! grep -q REPLACE_ME $(ADMIN_ENV) || { echo "replace REPLACE_ME in $(ADMIN_ENV)" >&2; exit 1; }
+	@test -f $(PUSHOVER_ENV) || { cp $(PUSHOVER_ENV).example $(PUSHOVER_ENV); chmod 600 $(PUSHOVER_ENV); }
+	@! grep -q REPLACE_ME $(PUSHOVER_ENV) || { echo "fill in the Pushover user_key and token in $(PUSHOVER_ENV) (see the comments in it)" >&2; exit 1; }
 	$(call kapply,base)
 
 # --wait covers the operator, Grafana and kube-state-metrics; Prometheus and Alertmanager are created

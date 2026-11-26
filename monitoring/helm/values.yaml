@@ -58,8 +58,41 @@ prometheus:
         - {name: traefik-gateway, namespace: traefik}
 
 alertmanager:
+  # Notifications go to Pushover. Only route and receivers are set here; the chart's default
+  # global settings and inhibit rules (critical mutes warning/info, ...) are kept, because Helm
+  # merges this map with the chart's. The credentials are files from Secret alertmanager-pushover
+  # (base/pushover.env, git-ignored), so nothing secret is in this file.
+  config:
+    route:
+      receiver: pushover
+      group_by: [namespace, alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        # Always-firing helpers, not problems.
+        - receiver: "null"
+          matchers:
+            - alertname = "Watchdog"
+        - receiver: "null"
+          matchers:
+            - alertname = "InfoInhibitor"
+    receivers:
+      - name: "null"
+      - name: pushover
+        pushover_configs:
+          - user_key_file: /etc/alertmanager/secrets/alertmanager-pushover/user_key
+            token_file: /etc/alertmanager/secrets/alertmanager-pushover/token
+            send_resolved: true
+            # Pushover priority: 1 (high, bypasses quiet hours) for critical, 0 for anything else
+            # that's firing, -1 (quiet) for "resolved".
+            priority: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}1{{ else }}0{{ end }}{{ else }}-1{{ end }}'
+            url: https://alertmanager.faultycloud.xyz
+            url_title: Open Alertmanager
   alertmanagerSpec:
     externalUrl: https://alertmanager.faultycloud.xyz
+    secrets:
+      - alertmanager-pushover
     storage:
       volumeClaimTemplate:
         spec:

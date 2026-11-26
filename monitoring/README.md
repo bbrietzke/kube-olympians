@@ -21,7 +21,7 @@ Prometheus, Alertmanager and Grafana from [kube-prometheus-stack](https://github
 | Namespace | `monitoring`, Pod Security `privileged`: node-exporter needs the host network, PID namespace and root filesystem. Labeled for `traefik-gateway`. |
 | Prometheus | 30 days of retention, capped at 45 GB, on a 50Gi `rook-ceph-ssd` volume. The TSDB's small random writes would be slow on the SMR HDDs. |
 | Discovery | `*SelectorNilUsesHelmValues: false`: Prometheus picks up **every** ServiceMonitor, PodMonitor, Probe, ScrapeConfig and PrometheusRule in the cluster, not just the chart's own. Other components can ship their own monitors. |
-| Alertmanager | 2Gi on SSD. **No receivers yet:** alerts show in its UI and in Grafana only. |
+| Alertmanager | 2Gi on SSD. Notifies **Pushover** (see below). |
 | Grafana | 5Gi on SSD for users and saved dashboards, with `Recreate` because the volume is ReadWriteOnce. The admin password is in git-ignored `base/grafana-admin.env`. The chart's 25 dashboards and both data sources are provisioned automatically. |
 | Routes | The chart's own Gateway API support (`route.main`) creates the three HTTPRoutes on `traefik-gateway`. |
 
@@ -39,6 +39,20 @@ All 26 targets were up:
 - the stack's own Prometheus, Alertmanager, Grafana and operator
 
 `Watchdog` always fires; that's the intended heartbeat.
+
+## Notifications: Pushover (set up 2026-11-25)
+- **What's sent:** every alert goes to Pushover, grouped by `namespace` and `alertname`. `Watchdog` and `InfoInhibitor`, the always-on helpers, go to `null`. The chart's default inhibit rules are kept, so a critical alert mutes the matching warning and info alerts.
+- **Priority:** `critical` is sent at 1, which gets through quiet hours. Other firing alerts are 0, and "resolved" notices are -1 (quiet).
+- **Timing:** a still-firing alert re-notifies every 12h. Resolved notices go out at the next `group_interval` (5m).
+- **Credentials:** `base/pushover.env` (git-ignored) holds `user_key` and an app `token`. It becomes Secret `alertmanager-pushover`, which is mounted into Alertmanager and read as `user_key_file` / `token_file`, so nothing secret is in `helm/values.yaml`. `make prerequisites` refuses to run while the file still has `REPLACE_ME`.
+- **Config:** `alertmanager.config.route` and `receivers` in `helm/values.yaml`. Helm merges them with the chart's defaults, but replaces lists.
+- **Test:** post an alert to the API. It resolves on its own at `endsAt`:
+
+  ```sh
+  curl -X POST https://alertmanager.faultycloud.xyz/api/v2/alerts -H 'Content-Type: application/json' -d '[{"labels":{"alertname":"PushoverTest","severity":"warning","namespace":"monitoring"},"annotations":{"summary":"Test"},"endsAt":"<ISO time a few minutes ahead>"}]'
+  ```
+
+  `alertmanager_notifications_total{integration="pushover"}` counts what was sent, and `alertmanager_notifications_failed_total{…,reason=…}` shows why a send failed (`authError` means wrong keys).
 
 ## Rook/Ceph (enabled 2026-11-25)
 - **Metrics:** `monitoring.enabled` in `rook/helm/operator.yaml` gives the Rook operator permission to create ServiceMonitors. In `rook/helm/cluster.yaml` it makes the operator create `rook-ceph-mgr` (ceph-mgr's Prometheus module) and `rook-ceph-exporter`, one per node with OSDs. All 4 targets are up.
@@ -58,4 +72,3 @@ All 26 targets were up:
 - **Cilium / Hubble:** `prometheus.enabled` and `serviceMonitor.enabled` in its values.
 - **Traefik:** a metrics ServiceMonitor from its chart values.
 - **Grafana login with Pocket ID** (generic OAuth), with callback `https://grafana.faultycloud.xyz/login/generic_oauth`.
-- **An Alertmanager receiver** (email, Discord, a webhook…).

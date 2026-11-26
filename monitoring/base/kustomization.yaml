@@ -14,6 +14,13 @@ secretGenerator:
     options:
       # The chart refers to the Secret by this exact name.
       disableNameSuffixHash: true
+  # Pushover user key and app token, mounted into Alertmanager at
+  # /etc/alertmanager/secrets/alertmanager-pushover/{user_key,token} (alertmanagerSpec.secrets).
+  - name: alertmanager-pushover
+    envs:
+      - pushover.env
+    options:
+      disableNameSuffixHash: true
 
 labels:
   - pairs:
