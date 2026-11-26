@@ -7,6 +7,8 @@ kind: Namespace
 metadata:
   name: whoami
   labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: platform
     olympians/traefik-gateway: allowed   # LAN Gateway
     olympians/exposure: public           # public Gateway
     pod-security.kubernetes.io/enforce: restricted

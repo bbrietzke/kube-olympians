@@ -1,0 +1,68 @@
+# cost-center labels for namespaces that nothing in this repo creates (Kubernetes itself, Talos,
+# Helm --create-namespace, upstream install manifests). Namespaces this repo does create carry the
+# label in their own namespace manifest instead (e.g. brietzke-auth/base/namespace.yaml).
+#
+# These are PARTIAL objects, applied server-side with field manager "cost-centers": only the
+# cost-center label is owned here, so applying them never touches anything Helm, Talos or the
+# owning component manages (and those never remove this label).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-public
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-node-lease
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cilium
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cilium-secrets
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels: {cost-center: platform}
+---
+# Created by `make -C rook helm` / `make -C traefik helm` on the Helm routes; the kustomize routes'
+# own namespace manifests carry the same label.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rook-ceph
+  labels: {cost-center: platform}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+  labels: {cost-center: platform}

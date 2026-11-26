@@ -4,5 +4,7 @@ kind: Namespace
 metadata:
   name: harbor
   labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: platform
     # Lets Harbor's HTTPRoute attach to traefik-gateway (see traefik/helm/postCertManager.yaml).
     olympians/traefik-gateway: allowed

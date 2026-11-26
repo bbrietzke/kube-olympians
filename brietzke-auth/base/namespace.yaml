@@ -5,6 +5,8 @@ kind: Namespace
 metadata:
   name: pocket-id
   labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: brietzke
     olympians/exposure: public
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/audit: restricted

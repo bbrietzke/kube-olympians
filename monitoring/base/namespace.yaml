@@ -5,6 +5,8 @@ kind: Namespace
 metadata:
   name: monitoring
   labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: platform
     olympians/traefik-gateway: allowed
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/audit: privileged

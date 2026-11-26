@@ -1,0 +1,11 @@
+# The cost-center values the admission policy accepts (validating-admission-policy.yaml).
+# Each key is one allowed value; its text is only a note for people. Add a key to add a cost center,
+# then `make -C cost-centers olympians`. The policy reads this live, so no policy change is needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: allowed-cost-centers
+  namespace: kube-system
+data:
+  brietzke: "brietzke-* apps: brietzke-me (site), mirotalk (video), pocket-id (auth)"
+  platform: "everything else: cluster infrastructure and shared services"

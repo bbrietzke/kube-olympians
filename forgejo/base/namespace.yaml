@@ -4,6 +4,8 @@ kind: Namespace
 metadata:
   name: forgejo
   labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: platform
     # Lets Forgejo's HTTPRoute attach to traefik-gateway (see traefik/helm/postCertManager.yaml).
     olympians/traefik-gateway: allowed
     # Talos enforces Pod Security Admission. The runners' docker:dind sidecar is privileged

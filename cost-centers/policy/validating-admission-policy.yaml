@@ -1,0 +1,52 @@
+# Nag, never block: every Namespace create/update without a cost-center label, or with a value
+# that isn't a key of ConfigMap kube-system/allowed-cost-centers, gets a kubectl/Helm warning and
+# an audit-log annotation. The binding uses Warn + Audit only (no Deny), and failurePolicy Ignore
+# lets requests through if the policy itself errors, so nothing in the cluster can be rejected.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cost-center-label
+spec:
+  failurePolicy: Ignore
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]     # not namespaces/status or /finalize, so deletion is untouched
+  variables:
+    - name: costCenter
+      expression: >-
+        has(object.metadata.labels) && 'cost-center' in object.metadata.labels
+        ? object.metadata.labels['cost-center'] : ''
+    - name: allowed
+      expression: "has(params.data) ? params.data : {}"
+    - name: allowedList
+      expression: "variables.allowed.map(k, k).join(', ')"
+  validations:
+    - expression: "variables.costCenter != ''"
+      reason: Invalid
+      messageExpression: >-
+        'namespace ' + object.metadata.name + ' has no cost-center label (chargeback, see
+        cost-centers/README.md); add cost-center: <one of ' + variables.allowedList + '>'
+    - expression: "variables.costCenter == '' || variables.costCenter in variables.allowed"
+      reason: Invalid
+      messageExpression: >-
+        'namespace ' + object.metadata.name + ' has cost-center=' + variables.costCenter +
+        ', which is not in ConfigMap kube-system/allowed-cost-centers (' + variables.allowedList +
+        '); fix the value or add it there'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cost-center-label
+spec:
+  policyName: cost-center-label
+  validationActions: [Warn, Audit]    # deliberately never Deny
+  paramRef:
+    name: allowed-cost-centers
+    namespace: kube-system
+    parameterNotFoundAction: Allow
