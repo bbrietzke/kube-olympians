@@ -1,15 +1,15 @@
 include ../common.mk
 
 NAMESPACE  := cloudflared
-TOKEN_FILE := base/cloudflared.env
+# The tunnel token comes from Bitwarden (base/external-secret.yaml), so this needs
+# external-secrets/ (helm + olympians) first.
 
 .PHONY: olympians whoami uninstall uninstall-whoami
 
-olympians: ## Deploy the cloudflared connector (needs base/cloudflared.env and traefik postCertManager)
-	@grep -Eq '^TUNNEL_TOKEN=.+' $(TOKEN_FILE) 2>/dev/null && ! grep -q 'REPLACE_ME' $(TOKEN_FILE) || { \
-		echo "$(TOKEN_FILE) is missing or has no token: cp $(TOKEN_FILE).example $(TOKEN_FILE) and fill in TUNNEL_TOKEN." >&2; \
-		exit 1; }
-	$(call kinstall,overlays/olympians)
+olympians: ## Deploy the cloudflared connector and its token ExternalSecret (Bitwarden); needs traefik postCertManager
+	$(call kapply,overlays/olympians)
+	$(KUBECTL) -n $(NAMESPACE) wait externalsecret/cloudflared-tunnel-token --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
+	$(KUSTOMIZE) build overlays/olympians | $(WAIT_READY)
 
 whoami: ## Deploy the whoami test app on both Gateways (whoami.brietzke.me + whoami.faultycloud.xyz)
 	$(call kinstall,overlays/whoami)

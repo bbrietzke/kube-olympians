@@ -5,18 +5,14 @@ include ../common.mk
 NAMESPACE     := monitoring
 CHART_REPO    := https://prometheus-community.github.io/helm-charts
 CHART_VERSION := 93.11.0
-ADMIN_ENV     := base/grafana-admin.env
-PUSHOVER_ENV  := base/pushover.env
+# Grafana's admin login and the Pushover credentials come from Bitwarden
+# (base/external-secrets.yaml), so this needs external-secrets/ (helm + olympians) first.
 
 .PHONY: prerequisites helm password uninstall-helm
 
-prerequisites: ## Generate the Grafana admin password if missing; require base/pushover.env; apply the namespace and Secrets
-	@test -f $(ADMIN_ENV) || { printf 'admin-user=admin\nadmin-password=%s\n' "$$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)" > $(ADMIN_ENV); \
-		chmod 600 $(ADMIN_ENV); echo "generated $(ADMIN_ENV)"; }
-	@! grep -q REPLACE_ME $(ADMIN_ENV) || { echo "replace REPLACE_ME in $(ADMIN_ENV)" >&2; exit 1; }
-	@test -f $(PUSHOVER_ENV) || { cp $(PUSHOVER_ENV).example $(PUSHOVER_ENV); chmod 600 $(PUSHOVER_ENV); }
-	@! grep -q REPLACE_ME $(PUSHOVER_ENV) || { echo "fill in the Pushover user_key and token in $(PUSHOVER_ENV) (see the comments in it)" >&2; exit 1; }
+prerequisites: ## Apply the namespace and the Grafana admin + Pushover ExternalSecrets (Bitwarden); waits for them
 	$(call kapply,base)
+	$(KUBECTL) -n $(NAMESPACE) wait externalsecret/grafana-admin externalsecret/alertmanager-pushover --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
 
 # --wait covers the operator, Grafana and kube-state-metrics; Prometheus and Alertmanager are created
 # by the operator afterwards, so wait for their StatefulSets and for the routes too.
@@ -27,8 +23,9 @@ helm: prerequisites ## Install or upgrade kube-prometheus-stack (helm/values.yam
 	$(WAIT_READY) -n $(NAMESPACE)
 	$(KUBECTL) -n $(NAMESPACE) wait httproute --all --for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True --timeout=$(WAIT_TIMEOUT)
 
-password: ## Print the Grafana admin login
-	@sed -n 's/^admin-user=/username: /p; s/^admin-password=/password: /p' $(ADMIN_ENV)
+password: ## Print the Grafana admin login, from its Secret (source: Bitwarden)
+	@printf 'username: '; $(KUBECTL) -n $(NAMESPACE) get secret grafana-admin -o jsonpath='{.data.admin-user}' | base64 -d; echo
+	@printf 'password: '; $(KUBECTL) -n $(NAMESPACE) get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
 
 # Helm doesn't delete CRDs, so ServiceMonitors etc. elsewhere survive an uninstall. The PVCs from
 # the Prometheus/Alertmanager StatefulSets are kept too (delete them to drop the metrics history).

@@ -6,13 +6,5 @@ metadata:
 namespace: cert-manager
 resources:
   - issuers.yaml
-
-# The Cloudflare API token comes from cloudflare.env, a local file kept out of git.
-# Copy cloudflare.env.example to cloudflare.env and fill in the token.
-secretGenerator:
-  - name: cloudflare-api-token-secret
-    envs:
-      - cloudflare.env
-    options:
-      # The ClusterIssuer refers to the Secret by this exact name.
-      disableNameSuffixHash: true
+  # The Cloudflare API token, from Bitwarden (needs external-secrets/ first).
+  - external-secret.yaml

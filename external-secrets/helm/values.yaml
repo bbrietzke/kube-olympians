@@ -1,0 +1,29 @@
+# External Secrets Operator (https://external-secrets.io), chart pinned in ../Makefile.
+# The chart's controller, webhook and cert controller already run as non-root with a read-only
+# root filesystem, which PSA restricted accepts.
+
+# Bitwarden Secrets Manager needs the SDK server: a small HTTPS REST wrapper around Bitwarden's Rust
+# SDK. Its certificate (Secret bitwarden-tls-certs) comes from overlays/prerequisites.
+bitwarden-sdk-server:
+  enabled: true
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532          # the image's own user
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+
+# Metrics for Prometheus (kube-prometheus-stack selects ServiceMonitors in every namespace).
+serviceMonitor:
+  enabled: true
+metrics:
+  service:
+    enabled: true

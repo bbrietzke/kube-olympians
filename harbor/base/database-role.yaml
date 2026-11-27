@@ -14,8 +14,8 @@ spec:
   comment: Harbor container registry (harbor namespace), owner of the harbor database
   ensure: present
   login: true
-  # kubernetes.io/basic-auth Secret in the db namespace (base/kustomization.yaml secretGenerator).
-  # Changing the password in base/harbor-db.env and re-running `make prerequisites` rotates it.
+  # kubernetes.io/basic-auth Secret in the db namespace, from Bitwarden (base/external-secrets.yaml).
+  # Changing db/harbor-db-credentials/password in Bitwarden rotates it (see README.md).
   passwordSecret:
     name: harbor-db-credentials
   # Keep the role in PostgreSQL if this object is deleted (the "harbor" database depends on it).

@@ -42,11 +42,11 @@
 Job containers share the pod's network (`network: host`). They reach dind on `localhost:2376` and resolve names through the cluster DNS, for example `git.faultycloud.xyz` and `harbor.faultycloud.xyz`.
 
 **Registration is offline, with pre-shared secrets.**
-1. `make prerequisites` generates `base/forgejo-runner.env` with one 40-hex secret per runner. Its UUID is the first 16 characters as hex-encoded ASCII.
+1. Each runner has a pre-shared 40-hex secret in Bitwarden (`forgejo/forgejo-runner/token-N`), and its UUID (`uuid-N`) is the first 16 characters as hex-encoded ASCII. The `forgejo-runner` ExternalSecret brings them into the cluster.
 2. `make runners` registers each secret inside the Forgejo pod with `forgejo forgejo-cli actions register --name forgejo-runner-N --secret …`, and checks that Forgejo returns the expected UUID.
 3. It then applies the StatefulSet. Re-running it is safe.
 
-To add a runner, add `token-2`/`uuid-2` to the env file (same derivation), add `2` to `RUNNERS` in the Makefile, raise `replicas`, and run `make prerequisites runners`.
+To add a runner, add `forgejo/forgejo-runner/token-2` and `uuid-2` to Bitwarden (same derivation) and to the `forgejo-runner` ExternalSecret, add `2` to `RUNNERS` in the Makefile, raise `replicas`, and run `make prerequisites runners`.
 
 **Pod Security.** Talos enforces Pod Security Admission, so the `forgejo` namespace is labeled `pod-security.kubernetes.io/enforce=privileged` (`base/namespace.yaml`). Without it the runner pods are rejected.
 
@@ -86,13 +86,13 @@ curl -u forgejo-admin:<password> -H 'Content-Type: application/json' \
 
 ## Credentials
 
-`make prerequisites` creates these git-ignored files with random values if they're missing. The `*.env.example` files show their format.
+They live in **Bitwarden Secrets Manager** and reach the cluster through ExternalSecrets (`base/external-secrets.yaml`; see `external-secrets/README.md`). `make password` prints the admin login from its Secret.
 
-| File | Secret(s) | Used by |
+| Bitwarden secret(s) | Secret(s) | Used by |
 | --- | --- | --- |
-| `base/forgejo-db.env` | `forgejo-db-credentials` (`db`), `forgejo-database` (`forgejo`) | CNPG `DatabaseRole`; Forgejo's `FORGEJO__DATABASE__PASSWD` |
-| `base/forgejo-admin.env` | `forgejo-admin` | The chart's initial admin. The username can't be `admin`. |
-| `base/forgejo-runner.env` | `forgejo-runner` | Runner registration and the runner config |
+| `db/forgejo-db-credentials/password` | `forgejo-db-credentials` (`db`), `forgejo-database` (`forgejo`) | CNPG `DatabaseRole`; Forgejo's `FORGEJO__DATABASE__PASSWD` |
+| `forgejo/forgejo-admin/{username,password}` | `forgejo-admin` | The chart's initial admin. The username can't be `admin`. |
+| `forgejo/forgejo-runner/{token,uuid}-{0,1}` | `forgejo-runner` | Runner registration and the runner config |
 
 The database role's first reconcile fails for about 30 seconds (`secrets ... is forbidden`) while the operator grants access to its Secret. `make prerequisites` waits it out, as in the harbor component.
 

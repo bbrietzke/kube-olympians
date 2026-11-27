@@ -5,10 +5,11 @@ CHART_REPO    := https://charts.jetstack.io
 CHART_VERSION := v1.21.3
 ISSUER        := letsencrypt-dns01
 
-TOKEN_FILE    := base/cloudflare.env
+# The Cloudflare token comes from Bitwarden (ExternalSecret in base/), so `olympians` needs
+# external-secrets/ (helm + olympians) first. external-secrets itself only needs cert-manager
+# installed, not this issuer, so there is no loop.
 
 # Wait for the cert-manager workloads, then until the webhook accepts the issuer.
-# Only issuers.yaml is dry-run, so this works before cloudflare.env exists.
 define wait_certmanager
 $(WAIT_READY) -n $(NAMESPACE)
 $(call wait_accepts,cat base/issuers.yaml)
@@ -28,12 +29,10 @@ helm: prerequisites ## Install cert-manager with Helm (helm/values.yaml); waits 
 		-n $(NAMESPACE) --create-namespace -f helm/values.yaml --wait
 	$(wait_certmanager)
 
-olympians: ## Apply the Cloudflare token Secret and the letsencrypt-dns01 ClusterIssuer; waits until it is Ready
-	@grep -Eq '^api-token=.+' $(TOKEN_FILE) 2>/dev/null && ! grep -q 'REPLACE_ME' $(TOKEN_FILE) || { \
-		echo "$(TOKEN_FILE) is missing or has no token: cp $(TOKEN_FILE).example $(TOKEN_FILE) and fill in api-token." >&2; \
-		exit 1; }
+olympians: ## Apply the Cloudflare token ExternalSecret (Bitwarden) and the letsencrypt-dns01 ClusterIssuer; waits until both are Ready
 	$(call wait_accepts,$(KUSTOMIZE) build overlays/olympians)
 	$(call kapply,overlays/olympians)
+	$(KUBECTL) -n $(NAMESPACE) wait externalsecret/cloudflare-api-token-secret --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
 	$(KUBECTL) wait clusterissuer/$(ISSUER) --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
 
 # Neither uninstall touches the Gateway API CRDs; `make -C ../traefik uninstall` owns those.

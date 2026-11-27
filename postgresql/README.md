@@ -156,12 +156,12 @@ A restore takes the newest base backup from before the target time and replays a
 | What | Where |
 | --- | --- |
 | Bucket, path, endpoint, compression, retention, B2 checksum workaround | `base/object-store.yaml` (ObjectStore `backblaze`) |
-| B2 key | `base/backblaze.env` (git-ignored) → Secret `backblaze-b2`. Template: `base/backblaze.env.example`. |
+| B2 key | Bitwarden `db/backblaze-b2/{ACCESS_KEY_ID,ACCESS_SECRET_KEY}` → ExternalSecret → Secret `backblaze-b2` (`base/external-secret.yaml`) |
 | Enable archiving on `cluster00` | `plugins` patch in `overlays/olympians/kustomization.yaml` (`serverName: cluster00`) |
 | Weekly base backup | `overlays/olympians/backup-b2.yaml` |
 | Ad-hoc base backup | `overlays/b2backup/`, used by `make b2backup` |
 
-- **The key.** Use a B2 application key restricted to the bucket, with read and write access. `make olympians` refuses to run while `backblaze.env` is missing or still contains `REPLACE_ME`. To rotate the key, edit `backblaze.env` and re-run `make olympians`.
+- **The key.** Use a B2 application key restricted to the bucket, with read and write access. It lives in Bitwarden, off the cluster, so a restore from B2 is still possible after losing the whole cluster. To rotate the key, change both values in Bitwarden; ESO syncs them within an hour (`refreshInterval: 1h`).
 - **The bucket.** It needs the B2 lifecycle rule **"Keep only the last version of the file"**. Without it, B2 only *hides* the files that retention deletes and keeps billing for them.
 - **The first base backup.** `make olympians` waits until every instance has the sidecar and archiving works, then takes a base backup if none exists yet. The schedule's own `immediate` run is off: it would start before the sidecars exist and fail with "requested plugin is not available".
 - **Checksums.** `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` are set to `when_required` on the sidecar, the plugin's documented workaround for S3-compatible stores that reject newer boto3 checksum headers. It is unverified whether B2 still needs it, and it is harmless if it doesn't.

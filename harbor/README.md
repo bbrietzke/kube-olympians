@@ -35,16 +35,15 @@
 
 ## How `make prerequisites` sets it up
 
-1. It generates two git-ignored password files, if they don't exist, with 27 random characters each:
-   - `base/harbor-db.env`: the PostgreSQL login for the `harbor` role.
-   - `base/harbor-admin.env`: Harbor's initial admin password.
-   The `*.env.example` files show their format.
+1. The passwords live in **Bitwarden Secrets Manager** (see `external-secrets/README.md`):
+   - `db/harbor-db-credentials/password`: the PostgreSQL login for the `harbor` role.
+   - `harbor/harbor-admin/HARBOR_ADMIN_PASSWORD`: Harbor's initial admin password.
 2. It applies `overlays/olympians`:
    - the `harbor` namespace, labeled `olympians/traefik-gateway=allowed` so its HTTPRoute can attach to the Gateway
-   - the Secrets `harbor-db-credentials` (`db` namespace, basic-auth, read by CloudNativePG), `harbor-database` and `harbor-admin` (`harbor` namespace, read by the chart)
+   - ExternalSecrets (`base/external-secrets.yaml`) that create the Secrets `harbor-db-credentials` (`db` namespace, basic-auth, read by CloudNativePG), `harbor-database` and `harbor-admin` (`harbor` namespace, read by the chart). Both DB Secrets come from the one Bitwarden password
    - a CNPG **`DatabaseRole`** named `harbor` (`base/database-role.yaml`): the login role, with its password from `harbor-db-credentials` and `databaseRoleReclaimPolicy: retain`
    - a CNPG **`Database`** named `harbor`, owner `harbor`, with `databaseReclaimPolicy: retain`
-3. It waits until the DatabaseRole reports `applied` with **no error message**, then until the Database is applied.
+3. It waits for the ExternalSecrets to sync, then until the DatabaseRole reports `applied` with **no error message**, then until the Database is applied.
 
 ### The role and database live outside cluster00's spec
 
@@ -52,7 +51,7 @@ Both use [declarative role management](https://cloudnative-pg.io/docs/1.30/decla
 
 - **The first reconcile fails briefly.** On a fresh DatabaseRole, it reports `applied=false` with `secrets "harbor-db-credentials" is forbidden` for about 30 seconds. The operator first has to add that Secret to the instance's RBAC Role, and then CNPG retries and succeeds. That's why `make prerequisites` waits for `applied=true` **and** an empty message, not just `applied`.
 - **A stale error can stick.** If a DatabaseRole ever shows `applied=true` with a leftover error message, metadata changes such as annotations don't trigger a new reconcile. A real spec change does, for example editing `comment` and re-running `make prerequisites`.
-- **Rotating the password:** change `password=` in `base/harbor-db.env` and re-run `make prerequisites`. CNPG updates the role, but Harbor reads `harbor-database` only at startup, so restart `harbor-core` and `harbor-jobservice` afterwards.
+- **Rotating the password:** change `db/harbor-db-credentials/password` in Bitwarden. ESO syncs it within an hour, or right away after `kubectl -n db annotate externalsecret harbor-db-credentials force-sync=$(date +%s) --overwrite` (and the same for `harbor-database` in `harbor`). CNPG updates the role, but Harbor reads `harbor-database` only at startup, so restart `harbor-core` and `harbor-jobservice` afterwards.
 
 ## Using Harbor
 
@@ -83,7 +82,7 @@ kubectl -n <ns> create secret docker-registry harbor-pull \
 - A multi-arch `busybox:1.37` was copied into `library` with `skopeo copy --all`, from a pod with a `hostAliases` entry for `harbor.faultycloud.app`, because node DNS wasn't set up yet. It read back as arm64 both with credentials and anonymously.
 - A Trivy scan completed in about a minute.
 
-The admin password in `base/harbor-admin.env` is only read the first time Harbor initialises its database. Change it later in the UI, and update the file to match for your own reference.
+The admin password (Bitwarden `harbor/harbor-admin/HARBOR_ADMIN_PASSWORD`, `make password`) is only read the first time Harbor initialises its database. Change it later in the UI, and update Bitwarden to match.
 
 ## Uninstalling
 

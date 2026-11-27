@@ -22,7 +22,7 @@ Prometheus, Alertmanager and Grafana from [kube-prometheus-stack](https://github
 | Prometheus | 30 days of retention, capped at 45 GB, on a 50Gi `rook-ceph-ssd` volume. The TSDB's small random writes would be slow on the SMR HDDs. |
 | Discovery | `*SelectorNilUsesHelmValues: false`: Prometheus picks up **every** ServiceMonitor, PodMonitor, Probe, ScrapeConfig and PrometheusRule in the cluster, not just the chart's own. Other components can ship their own monitors. |
 | Alertmanager | 2Gi on SSD. Notifies **Pushover** (see below). |
-| Grafana | 5Gi on SSD for users and saved dashboards, with `Recreate` because the volume is ReadWriteOnce. The admin password is in git-ignored `base/grafana-admin.env`. The chart's 25 dashboards and both data sources are provisioned automatically. |
+| Grafana | 5Gi on SSD for users and saved dashboards, with `Recreate` because the volume is ReadWriteOnce. The admin login comes from Bitwarden (`monitoring/grafana-admin/{admin-user,admin-password}`, ExternalSecret `grafana-admin`). `make password` prints it. The chart's 25 dashboards and both data sources are provisioned automatically. |
 | Routes | The chart's own Gateway API support (`route.main`) creates the three HTTPRoutes on `traefik-gateway`. |
 
 ## Talos specifics
@@ -44,7 +44,7 @@ All 26 targets were up:
 - **What's sent:** every alert goes to Pushover, grouped by `namespace` and `alertname`. `Watchdog` and `InfoInhibitor`, the always-on helpers, go to `null`. The chart's default inhibit rules are kept, so a critical alert mutes the matching warning and info alerts.
 - **Priority:** `critical` is sent at 1, which gets through quiet hours. Other firing alerts are 0, and "resolved" notices are -1 (quiet).
 - **Timing:** a still-firing alert re-notifies every 12h. Resolved notices go out at the next `group_interval` (5m).
-- **Credentials:** `base/pushover.env` (git-ignored) holds `user_key` and an app `token`. It becomes Secret `alertmanager-pushover`, which is mounted into Alertmanager and read as `user_key_file` / `token_file`, so nothing secret is in `helm/values.yaml`. `make prerequisites` refuses to run while the file still has `REPLACE_ME`.
+- **Credentials:** Bitwarden holds `monitoring/alertmanager-pushover/user_key` and the app `token`. The ExternalSecret `alertmanager-pushover` turns them into a Secret, which is mounted into Alertmanager and read as `user_key_file` / `token_file`, so nothing secret is in `helm/values.yaml`. Alertmanager reads the files on each notification, so a change in Bitwarden needs no restart.
 - **Config:** `alertmanager.config.route` and `receivers` in `helm/values.yaml`. Helm merges them with the chart's defaults, but replaces lists.
 - **Test:** post an alert to the API. It resolves on its own at `endsAt`:
 

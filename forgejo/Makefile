@@ -6,9 +6,6 @@ CHART_VERSION := 17.3.3
 # Chart 17.3.3 ships Forgejo 15.0.12 (LTS, supported until 2027-07-15). Runners: forgejo-runner
 # 13.2.2 (overlays/runners). All images are multi-arch (the olympians nodes are amd64).
 
-DB_ENV_FILE     := base/forgejo-db.env
-ADMIN_ENV_FILE  := base/forgejo-admin.env
-RUNNER_ENV_FILE := base/forgejo-runner.env
 RUNNERS         := 0 1
 
 # Needs CloudNativePG's cluster00 (postgresql olympians) and the Traefik Gateway with wildcard
@@ -17,31 +14,19 @@ RUNNERS         := 0 1
 
 .PHONY: prerequisites helm runners password uninstall-helm
 
-# 24 random alphanumerics plus "Aa1" (no quoting needed anywhere, satisfies complexity rules).
-define random_password
-$$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)Aa1
-endef
+# The credentials come from Bitwarden (base/external-secrets.yaml: ExternalSecrets through the
+# "bitwarden" ClusterSecretStore), so this needs external-secrets/ (helm + olympians) first.
+# To add a runner, add its token-N / uuid-N to Bitwarden and to the forgejo-runner ExternalSecret.
+# A runner token is 40 hex chars; its UUID is the first 16 chars as hex-encoded ASCII (8-4-4-4-12).
+RUNNER_SECRET = $(KUBECTL) -n $(NAMESPACE) get secret forgejo-runner -o jsonpath="{.data.$(1)}" | base64 -d
 
-# A runner secret is 40 hex chars; its UUID is the first 16 chars as hex-encoded ASCII (8-4-4-4-12).
-define runner_lines
-t=$$(LC_ALL=C tr -dc '0-9a-f' </dev/urandom | head -c 40); \
-h=$$(printf '%s' "$$(printf '%s' $$t | cut -c1-16)" | od -An -tx1 | tr -d ' \n'); \
-printf 'token-%s=%s\nuuid-%s=%s-%s-%s-%s-%s\n' $(1) $$t $(1) \
-	$$(echo $$h | cut -c1-8) $$(echo $$h | cut -c9-12) $$(echo $$h | cut -c13-16) $$(echo $$h | cut -c17-20) $$(echo $$h | cut -c21-32)
-endef
-
-prerequisites: ## Generate credential files if missing; apply the forgejo namespace, Secrets, and the "forgejo" DatabaseRole + Database in cluster00; waits for both
-	@test -f $(DB_ENV_FILE) || { printf 'username=forgejo\npassword=%s\n' "$(call random_password)" > $(DB_ENV_FILE); \
-		chmod 600 $(DB_ENV_FILE); echo "generated $(DB_ENV_FILE)"; }
-	@test -f $(ADMIN_ENV_FILE) || { printf 'username=forgejo-admin\npassword=%s\n' "$(call random_password)" > $(ADMIN_ENV_FILE); \
-		chmod 600 $(ADMIN_ENV_FILE); echo "generated $(ADMIN_ENV_FILE)"; }
-	@test -f $(RUNNER_ENV_FILE) || { : > $(RUNNER_ENV_FILE); chmod 600 $(RUNNER_ENV_FILE); \
-		for n in $(RUNNERS); do $(call runner_lines,$$n) >> $(RUNNER_ENV_FILE); done; echo "generated $(RUNNER_ENV_FILE)"; }
-	@! grep -q REPLACE_ME $(DB_ENV_FILE) $(ADMIN_ENV_FILE) $(RUNNER_ENV_FILE) || { echo "replace REPLACE_ME in base/*.env" >&2; exit 1; }
+prerequisites: ## Apply the forgejo namespace, its credential ExternalSecrets (Bitwarden), and the "forgejo" DatabaseRole + Database in cluster00; waits for all
 	@# The namespace must exist before the server-side dry run can validate the Secrets in it.
 	$(KUBECTL) create namespace $(NAMESPACE) --dry-run=client -o yaml | $(KUBECTL) apply -f -
 	$(call wait_accepts,$(KUSTOMIZE) build overlays/olympians)
 	$(call kapply,overlays/olympians)
+	$(KUBECTL) -n db wait externalsecret/forgejo-db-credentials --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
+	$(KUBECTL) -n $(NAMESPACE) wait externalsecret/forgejo-database externalsecret/forgejo-admin externalsecret/forgejo-runner --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
 	@# The first reconcile can fail with "secrets ... is forbidden" until the operator has granted the
 	@# instance access to the password Secret (~30s); it then retries. Wait for applied AND no message.
 	@echo "waiting for databaserole/forgejo to be applied with no error ..."; \
@@ -65,7 +50,7 @@ helm: prerequisites ## Install Forgejo with Helm (helm/values.yaml); waits for i
 # Registration is idempotent: re-registering a secret updates the existing runner record.
 runners: ## Register the runners' pre-shared secrets with Forgejo and deploy the runner StatefulSet; waits for it
 	@for n in $(RUNNERS); do \
-		t=$$(sed -n "s/^token-$$n=//p" $(RUNNER_ENV_FILE)); u=$$(sed -n "s/^uuid-$$n=//p" $(RUNNER_ENV_FILE)); \
+		t=$$($(call RUNNER_SECRET,token-$$n)); u=$$($(call RUNNER_SECRET,uuid-$$n)); \
 		got=$$($(KUBECTL) -n $(NAMESPACE) exec deploy/forgejo -c forgejo -- \
 			forgejo forgejo-cli actions register --name forgejo-runner-$$n --secret $$t 2>/dev/null | tail -1); \
 		[ "$$got" = "$$u" ] || { echo "registering forgejo-runner-$$n failed (got '$$got', expected $$u)" >&2; exit 1; }; \
@@ -73,8 +58,8 @@ runners: ## Register the runners' pre-shared secrets with Forgejo and deploy the
 	done
 	$(call kinstall,overlays/runners)
 
-password: ## Print the initial Forgejo admin username and password
-	@sed -n 's/^username=//p; s/^password=//p' $(ADMIN_ENV_FILE)
+password: ## Print the initial Forgejo admin username and password, from their Secret (source: Bitwarden)
+	@for k in username password; do $(KUBECTL) -n $(NAMESPACE) get secret forgejo-admin -o jsonpath="{.data.$$k}" | base64 -d; echo; done
 
 # uninstall-helm keeps the data: the repository PVC (gitea-shared-storage, helm resource-policy
 # keep), the forgejo namespace and its Secrets, and the "forgejo" database and role in cluster00

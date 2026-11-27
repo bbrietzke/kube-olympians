@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: external-secrets-base-kustomization
+resources:
+  - cluster-secret-store.yaml
+
+# The bootstrap secret: the Bitwarden machine account's access token. It's the only secret that
+# can't come from Bitwarden itself. Keep a copy in your Bitwarden password vault.
+secretGenerator:
+  - name: bitwarden-access-token
+    namespace: external-secrets
+    envs:
+      - bitwarden.env
+    options:
+      disableNameSuffixHash: true

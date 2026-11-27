@@ -31,9 +31,7 @@ The tunnel is **remotely managed**: its routes live in Cloudflare, not in this r
 
 1. Dashboard → **Networking → Tunnels → Create a tunnel** → type **Cloudflared**, name `olympians` (tunnel ID `1591f6b5-7f71-4587-99f1-b91953db595c`).
 2. Copy the token from the install command (the long `eyJ…` string after `--token`; not the tunnel ID):
-   ```sh
-   cp cloudflared/base/cloudflared.env.example cloudflared/base/cloudflared.env   # then paste it as TUNNEL_TOKEN
-   ```
+   Store it in Bitwarden Secrets Manager as `cloudflared/cloudflared-tunnel-token/TUNNEL_TOKEN`, in the `olympians` project. The `cloudflared-tunnel-token` ExternalSecret brings it into the cluster.
    This is separate from cert-manager's DNS-01 token. Don't reuse either one for the other. To check it's the right token without printing it, decode it: its `"t"` field is the tunnel ID.
 3. **Networking → Tunnels → `olympians` → Routes tab → Add route → Published application**, twice. Both use **Service URL** `http://traefik-internal.traefik.svc.cluster.local:80`:
    - **Subdomain** blank, **Domain** `brietzke.me`
@@ -48,7 +46,7 @@ Cloudflare's Universal SSL certificate covers `brietzke.me` and `*.brietzke.me` 
 | Target | What it does |
 |---|---|
 | `make -C traefik postCertManager` | Adds the `public` entrypoint and the `traefik-internal` Service, then applies the `traefik-public` Gateway (`make -C traefik public` on its own) |
-| `make -C cloudflared olympians` | Deploys the connector. Refuses to run without `base/cloudflared.env`. |
+| `make -C cloudflared olympians` | Deploys the connector and its token ExternalSecret. Needs `external-secrets`. After changing the token in Bitwarden, also run `kubectl -n cloudflared rollout restart deployment/cloudflared`. |
 | `make -C cloudflared whoami` | Test app at `whoami.brietzke.me` (via the tunnel) and `whoami.faultycloud.xyz` (LAN) |
 | `make -C cloudflared uninstall-whoami` / `uninstall` | Remove the test app / the connector. The tunnel and its routes stay in Cloudflare. |
 

@@ -6,17 +6,8 @@ resources:
   - cluster00.yaml
   - namespace.yaml
   - object-store.yaml
-
-# The Backblaze B2 key comes from backblaze.env, a local file kept out of git.
-# Copy backblaze.env.example to backblaze.env and fill in both values.
-secretGenerator:
-  - name: backblaze-b2
-    namespace: db
-    envs:
-      - backblaze.env
-    options:
-      # The ObjectStore refers to the Secret by this exact name.
-      disableNameSuffixHash: true
+  # The Backblaze B2 key, from Bitwarden (needs external-secrets/ first).
+  - external-secret.yaml
 
 labels:
   - includeSelectors: true

@@ -6,10 +6,6 @@ namespace: cloudflared
 resources:
   - namespace.yaml
   - deployment.yaml
+  # The tunnel token, from Bitwarden (needs external-secrets/ first).
+  - external-secret.yaml
 
-# The tunnel token comes from cloudflared.env, a local file kept out of git.
-# Copy cloudflared.env.example to cloudflared.env and fill in the token.
-secretGenerator:
-  - name: cloudflared-tunnel-token
-    envs:
-      - cloudflared.env

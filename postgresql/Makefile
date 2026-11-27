@@ -11,8 +11,8 @@ CLUSTER       := cluster00
 # initdb plus two replicas cloning over the network can take a while.
 PG_TIMEOUT    ?= 15m
 
-# Backblaze B2 key for the Barman Cloud ObjectStore (git-ignored; see base/backblaze.env.example).
-B2_ENV_FILE   := base/backblaze.env
+# The Backblaze B2 key for the Barman Cloud ObjectStore comes from Bitwarden (ExternalSecret
+# base/external-secret.yaml), so `olympians` needs external-secrets/ (helm + olympians) first.
 
 # make snapshot / make b2backup: the Backup is named $(CLUSTER)[-b2]-$(SNAPSHOT_LABEL)-<UTC timestamp>.
 SNAPSHOT_LABEL ?= adhoc
@@ -33,14 +33,11 @@ helm: ## Install the CloudNativePG operator with Helm (helm/values.yaml) and the
 
 # The namespace is created first so the server-side dry run (which waits for the operator's
 # webhook to answer) can validate the namespaced Cluster.
-olympians: ## Create the db namespace, the B2 key Secret, ObjectStore, cluster00 and its backup schedules; waits until Ready
-	@grep -Eq '^ACCESS_KEY_ID=.+' $(B2_ENV_FILE) 2>/dev/null && grep -Eq '^ACCESS_SECRET_KEY=.+' $(B2_ENV_FILE) \
-		&& ! grep -q 'REPLACE_ME' $(B2_ENV_FILE) || { \
-		echo "$(B2_ENV_FILE) is missing or incomplete: cp $(B2_ENV_FILE).example $(B2_ENV_FILE) and fill in both keys." >&2; \
-		exit 1; }
+olympians: ## Create the db namespace, the B2 key ExternalSecret (Bitwarden), ObjectStore, cluster00 and its backup schedules; waits until Ready
 	$(KUBECTL) create namespace $(DB_NAMESPACE) --dry-run=client -o yaml | $(KUBECTL) apply -f -
 	$(call wait_accepts,$(KUSTOMIZE) build overlays/olympians)
 	$(call kapply,overlays/olympians)
+	$(KUBECTL) -n $(DB_NAMESPACE) wait externalsecret/backblaze-b2 --for=condition=Ready --timeout=$(WAIT_TIMEOUT)
 	$(KUBECTL) -n $(DB_NAMESPACE) wait cluster/$(CLUSTER) --for=condition=Ready --timeout=$(PG_TIMEOUT)
 	@$(MAKE) --no-print-directory b2-ready
 	@if $(KUBECTL) -n $(DB_NAMESPACE) get backup -l cnpg.io/cluster=$(CLUSTER) \

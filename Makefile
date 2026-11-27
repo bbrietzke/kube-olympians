@@ -5,7 +5,8 @@ include common.mk
 #   external-snapshotter - VolumeSnapshot CRDs + controller (rook's CSI snapshots use them)
 #   rook                 - Ceph cluster, hdd-pool / ssd-pool and their StorageClasses (rook-ceph-hdd is the default)
 #   traefik              - Gateway API CRDs + Traefik ingress / gateway
-#   certificateManager   - cert-manager + letsencrypt-dns01 ClusterIssuer (needs the Gateway API CRDs)
+#   certificateManager   - cert-manager, then (after external-secrets) the letsencrypt-dns01 ClusterIssuer (needs the Gateway API CRDs)
+#   external-secrets     - External Secrets Operator + Bitwarden Secrets Manager: every Secret below comes from Bitwarden (token in external-secrets/base/bitwarden.env)
 #   postgresql           - CloudNativePG operator (cluster00 is `make -C postgresql olympians`)
 #   harbor               - container registry; manual (`make -C harbor helm`), needs cluster00 + traefik postCertManager
 #   forgejo              - git forge + Actions runners; manual (`make -C forgejo helm runners`), needs cluster00 + traefik postCertManager
@@ -27,7 +28,9 @@ install: ## Install every component with kustomize (Cilium with Helm), then appl
 	$(MAKE) -C external-snapshotter install olympians
 	$(MAKE) -C rook install olympians
 	$(MAKE) -C traefik install
-	$(MAKE) -C certificateManager install olympians
+	$(MAKE) -C certificateManager install
+	$(MAKE) -C external-secrets helm olympians
+	$(MAKE) -C certificateManager olympians
 	$(MAKE) -C postgresql install
 
 helm: ## Install every component with Helm where a chart exists (kustomize otherwise)
@@ -35,7 +38,9 @@ helm: ## Install every component with Helm where a chart exists (kustomize other
 	$(MAKE) -C external-snapshotter install olympians
 	$(MAKE) -C rook helm olympians
 	$(MAKE) -C traefik helm
-	$(MAKE) -C certificateManager helm olympians
+	$(MAKE) -C certificateManager helm
+	$(MAKE) -C external-secrets helm olympians
+	$(MAKE) -C certificateManager olympians
 	$(MAKE) -C postgresql helm
 
 # Neither teardown removes Cilium: without a CNI the nodes go NotReady and nothing can reschedule.
@@ -51,6 +56,7 @@ uninstall: ## Tear down everything installed by `make install` (except Cilium)
 	-$(MAKE) -C forgejo uninstall-helm
 	-$(MAKE) -C harbor uninstall-helm
 	-$(MAKE) -C postgresql uninstall
+	-$(MAKE) -C external-secrets uninstall-helm
 	-$(MAKE) -C certificateManager uninstall
 	-$(MAKE) -C traefik uninstall
 	-$(MAKE) -C rook uninstall
@@ -67,6 +73,7 @@ uninstall-helm: ## Tear down everything installed by `make helm` (except Cilium)
 	-$(MAKE) -C forgejo uninstall-helm
 	-$(MAKE) -C harbor uninstall-helm
 	-$(MAKE) -C postgresql uninstall-helm
+	-$(MAKE) -C external-secrets uninstall-helm
 	-$(MAKE) -C certificateManager uninstall-helm
 	-$(MAKE) -C traefik uninstall-helm
 	-$(MAKE) -C rook uninstall-helm

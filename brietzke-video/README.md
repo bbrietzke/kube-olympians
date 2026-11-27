@@ -4,7 +4,7 @@
 
 | Task | Command (from `brietzke-video/`) |
 | --- | --- |
-| Deploy / apply config changes | `make olympians` (fills in generated secrets in `base/mirotalk.env` first; restarts the pod) |
+| Deploy / apply config changes | `make olympians` (waits for its ExternalSecret; restarts the pod) |
 | Remove | `make uninstall` (nothing is stored, so nothing is lost) |
 
 ## How it works
@@ -17,7 +17,7 @@
 - `base/config.yaml` holds the settings, as environment variables; the full list is in [upstream's `.env.template`](https://github.com/miroslavpejic85/mirotalkc2c/blob/main/.env.template).
 - **The image bakes in `.env.template`**, and the app loads it without overriding variables set here. Anything not set falls back to the template, which **enables TURN with a shared metered.ca account**. That's why `TURN_SERVER_ENABLED: "false"` is set explicitly, along with the survey, ngrok, email, Sentry and Mattermost defaults.
 - `CORS_ORIGIN` must be a **JSON list** (`'["https://video.brietzke.me"]'`). A bare URL fails to parse, and the app logs `Error parsing CORS_ORIGIN` and allows every origin.
-- `base/mirotalk.env` (git-ignored, generated) holds `API_KEY_SECRET`, which guards the REST API (`POST /api/v1/meeting`, `/api/v1/join`; header `authorization`).
+- `API_KEY_SECRET` (Bitwarden `mirotalk/mirotalk-secrets/API_KEY_SECRET`, from Bitwarden Secrets Manager (`external-secrets/`)) which guards the REST API (`POST /api/v1/meeting`, `/api/v1/join`; header `authorization`).
 - **Image:** upstream publishes only `:latest`, so `base/mirotalk.yaml` pins it by digest. To update, look up the new digest (`docker buildx imagetools inspect mirotalk/c2c:latest`), change it, and run `make olympians`.
 
 ## Access
@@ -27,7 +27,7 @@
 - **Guests join without an account,** but only a room that already exists: `/?room=<name>` and `/join?room=<name>&name=<who>` work once you're in the room. Asking for a room that doesn't exist sends a guest to the login (`/`), or returns MiroTalk's "not found" JSON for `/join`. MiroTalk sends that JSON with status 200.
 - **Use room names that are hard to guess.** Anyone who knows the name of a room in progress can join it.
 - **Settings:** `OIDC_*` in `base/config.yaml`. `OIDC_AUTH_REQUIRED: "false"` is what lets guests join. Set it to `"true"` to require a login from everyone. `OIDC_AUTH_LOGOUT: "false"`, because `true` calls Auth0's logout endpoint, which Pocket ID doesn't have.
-- **Client credentials:** the Pocket ID client "MiroTalk" is confidential, with callback `https://video.brietzke.me/auth/callback`. MiroTalk also sends PKCE (S256). Its ID and secret are in `base/mirotalk.env` (git-ignored), next to the generated `API_KEY_SECRET` and `SESSION_SECRET`. `make prerequisites` refuses to deploy while they're still `REPLACE_ME`.
+- **Client credentials:** the Pocket ID client "MiroTalk" is confidential, with callback `https://video.brietzke.me/auth/callback`. MiroTalk also sends PKCE (S256). Its ID and secret are in Bitwarden (`mirotalk/mirotalk-secrets/OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`), next to `API_KEY_SECRET` and `SESSION_SECRET`. After changing any of them in Bitwarden, run `make olympians`: ESO syncs the Secret, but only a restart makes MiroTalk read it.
 - **Pocket ID must be up** for anyone to create a room. Guests joining an existing room don't need it.
 
 **Tested 2026-11-25 from outside, not logged in:**

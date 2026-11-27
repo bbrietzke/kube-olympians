@@ -1,0 +1,60 @@
+# TLS for the bitwarden-sdk-server, which must serve HTTPS (ESO talks to it with the machine
+# account's token). A private CA just for this, from cert-manager; no Cloudflare/ACME involved, so
+# it works before any secret has been synced.
+#   selfsigned Issuer -> CA cert (Secret bitwarden-sdk-ca) -> CA Issuer -> server cert
+#   (Secret bitwarden-tls-certs, the name the SDK server chart mounts at /certs).
+# The ClusterSecretStore trusts the CA via caProvider (Secret bitwarden-sdk-ca, key ca.crt). ESO's
+# docs say not to point it at the server's own Secret.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bitwarden-sdk-selfsigned
+  namespace: external-secrets
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bitwarden-sdk-ca
+  namespace: external-secrets
+spec:
+  isCA: true
+  commonName: bitwarden-sdk-server CA (olympians)
+  secretName: bitwarden-sdk-ca
+  duration: 87600h      # 10 years
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: Issuer
+    name: bitwarden-sdk-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bitwarden-sdk-ca
+  namespace: external-secrets
+spec:
+  ca:
+    secretName: bitwarden-sdk-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bitwarden-tls-certs
+  namespace: external-secrets
+spec:
+  secretName: bitwarden-tls-certs
+  dnsNames:
+    - bitwarden-sdk-server
+    - bitwarden-sdk-server.external-secrets
+    - bitwarden-sdk-server.external-secrets.svc
+    - bitwarden-sdk-server.external-secrets.svc.cluster.local
+  duration: 8760h       # 1 year; cert-manager renews it
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: Issuer
+    name: bitwarden-sdk-ca
