@@ -1,0 +1,12 @@
+# NVIDIA GPU Operator: device plugin, GPU feature discovery, DCGM exporter. Its daemonsets need host
+# access (hostPath, privileged), so the namespace is PSA privileged, as the Talos NVIDIA guide says.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-operator
+  labels:
+    # Chargeback: OpenCost dashboards group cost by this (see opencost/README.md).
+    cost-center: platform
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged

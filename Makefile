@@ -11,6 +11,7 @@ include common.mk
 #   forgejo              - git forge + Actions runners; manual (`make -C forgejo helm runners`), needs cluster00 + traefik postCertManager
 #   monitoring           - kube-prometheus-stack (Prometheus, Alertmanager, Grafana), LAN only; manual (`make -C monitoring helm`)
 #   opencost             - cost allocation (cloud-equivalent prices) exported to Prometheus/Grafana; manual (`make -C opencost helm`), needs monitoring
+#   gpu-operator         - NVIDIA GPU Operator for the workers' RTX 3050s (driver from Talos extensions); manual (`make -C gpu-operator helm smoke-test`)
 #   cost-centers         - cost-center labels on namespaces the repo doesn't create, plus a warn-only label policy (chargeback); `make -C cost-centers olympians check`
 #   cloudflared          - Cloudflare Tunnel to the traefik-public Gateway (brietzke.me); manual (`make -C cloudflared olympians`), needs traefik postCertManager
 #   brietzke-website     - brietzke.me (Hugo site from Forgejo brietzke-me/website, image in Harbor) on traefik-public; manual (`make -C brietzke-website deploy TAG=<sha12>`), needs cloudflared

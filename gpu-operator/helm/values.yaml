@@ -1,0 +1,25 @@
+# NVIDIA GPU Operator (https://github.com/NVIDIA/gpu-operator), pinned in ../Makefile.
+#
+# Talos provides the driver and the container runtime itself, as system extensions in the workers'
+# schematic (../talos_olympians/schematic-gpu-worker.yaml: nvidia-open-gpu-kernel-modules-lts +
+# nvidia-container-toolkit-lts), with the kernel modules loaded by gpu-worker-patch.yaml. So the
+# operator must not install either; it runs the device plugin, GPU feature discovery, node feature
+# discovery, the validator and the DCGM exporter. These three settings are from the Talos NVIDIA guide.
+driver:
+  enabled: false
+toolkit:
+  enabled: false
+hostPaths:
+  driverInstallDir: /usr/local      # where the Talos extension puts the driver (nvidia-smi etc.)
+
+# GeForce RTX 3050s: no MIG and no confidential computing, so skip those managers.
+migManager:
+  enabled: false
+ccManager:
+  enabled: false
+
+# GPU metrics (utilisation, memory, temperature, power) for Prometheus. The chart's ServiceMonitor is
+# picked up because kube-prometheus-stack selects monitors from every namespace.
+dcgmExporter:
+  serviceMonitor:
+    enabled: true
